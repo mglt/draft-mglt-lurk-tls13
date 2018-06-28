@@ -4,12 +4,12 @@
 
 LURK                                                          D. Migault
 Internet-Draft                                                  Ericsson
-Intended status: Standards Track                           June 11, 2018
-Expires: December 13, 2018
+Intended status: Standards Track                           June 27, 2018
+Expires: December 29, 2018
 
 
          LURK Extension version 1 for (D)TLS 1.2 Authentication
-                         draft-mglt-lurk-tls12
+                        draft-mglt-lurk-tls13-00
 
 Abstract
 
@@ -32,7 +32,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on December 13, 2018.
+   This Internet-Draft will expire on December 29, 2018.
 
 Copyright Notice
 
@@ -53,9 +53,9 @@ Copyright Notice
 
 
 
-Migault                 Expires December 13, 2018               [Page 1]
+Migault                 Expires December 29, 2018               [Page 1]
 
-Internet-Draft                LURK/TLS 1.2                     June 2018
+Internet-Draft                LURK/TLS 1.3                     June 2018
 
 
 Table of Contents
@@ -67,27 +67,27 @@ Table of Contents
      3.2.  Response Payload  . . . . . . . . . . . . . . . . . . . .   6
      3.3.  LURK Client Behavior  . . . . . . . . . . . . . . . . . .   6
      3.4.  LURK Server Behavior  . . . . . . . . . . . . . . . . . .   7
-   4.  auth  . . . . . . . . . . . . . . . . . . . . . . . . . . . .   8
-     4.1.  Request Payload . . . . . . . . . . . . . . . . . . . . .   8
+   4.  auth  . . . . . . . . . . . . . . . . . . . . . . . . . . . .   9
+     4.1.  Request Payload . . . . . . . . . . . . . . . . . . . . .   9
      4.2.  Response Payload  . . . . . . . . . . . . . . . . . . . .  10
      4.3.  LURK Client Behavior (TLS Server) . . . . . . . . . . . .  10
-     4.4.  LURK Client Behavior (TLS Client) . . . . . . . . . . . .  11
+     4.4.  LURK Client Behavior (TLS Client) . . . . . . . . . . . .  12
        4.4.1.  Local Ticket  . . . . . . . . . . . . . . . . . . . .  13
-     4.5.  LURK Server Behavior  . . . . . . . . . . . . . . . . . .  13
+     4.5.  LURK Server Behavior  . . . . . . . . . . . . . . . . . .  14
    5.  Security Considerations . . . . . . . . . . . . . . . . . . .  15
    6.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  15
-   7.  Acknowledgments . . . . . . . . . . . . . . . . . . . . . . .  15
-   8.  Normative References  . . . . . . . . . . . . . . . . . . . .  15
-   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  15
+   7.  Acknowledgments . . . . . . . . . . . . . . . . . . . . . . .  16
+   8.  Normative References  . . . . . . . . . . . . . . . . . . . .  16
+   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  16
 
 1.  Introduction
 
    This document defines a LURK extension for TLS 1.3.  This document
-   assume s the reader is familiar with the LURK architecture
-   [I-D.mglt-lurk-lurk] that describes the LURK architecture as well as
-   the LURK Protocol and the integration of the LURK extensions.  The
-   motivations for the LURK Extension TLS 1.3 are similar to those for
-   the LURK extension of TLS 1.2 [I-D.mglt-lurk-tls12].
+   assume s the reader is familiar with [I-D.mglt-lurk-lurk] that
+   describes the LURK architecture as well as the LURK Protocol and the
+   integration of the LURK extensions.  The motivations for the LURK
+   Extension TLS 1.3 are similar to those for the LURK extension of TLS
+   1.2 [I-D.mglt-lurk-tls12].
 
    LURK defines an interface to a Cryptographic Service that stores the
    security credentials - Typically the PSKs and private keys.
@@ -96,40 +96,38 @@ Table of Contents
 
    The TLS Server expects from the Cryptographic Service:
 
-   o  The necessary keys to complete the handshake.  This typically
-      includes the [sender]_handshake_traffic_secret to generate the
-      keys necessary to encrypt the handshake extensions and messages,
-      the [sender]_application_traffic_secret_N keys to protect the
-      application data or the exporter_master_secret when needed.
+   o  To retrieve the necessary keys to complete the handshake.  This
+      typically includes the [sender]_handshake_traffic_secret to
+      generate the keys necessary to encrypt the handshake extensions
+      and messages, the [sender]_application_traffic_secret_N keys to
+      protect the application data or the exporter_master_secret when
+      needed.
 
-   o  Handshake message or extensions that authenticate the TLS Server.
-      This typically includes the CertificateVerify and Finished
-      message.
+   o  To generate of Handshake message or extensions that authenticate
+      the TLS Server.  This typically includes the CertificateVerify and
+      Finished message.
 
 
 
-
-Migault                 Expires December 13, 2018               [Page 2]
+Migault                 Expires December 29, 2018               [Page 2]
 
-Internet-Draft                LURK/TLS 1.2                     June 2018
+Internet-Draft                LURK/TLS 1.3                     June 2018
 
 
-   o  NewSessionTicket to enable the TLS CLient to perform session
-      resumption.
+   o  To retrieve NewSessionTicket to enable the TLS Client to perform
+      session resumption.
 
-   The TLS Client is especially expected to interact with the
-   Cryptographic Service when it is authenticating itself.  Interactions
-   with the Cryptographic Service are expected to be as follows:
+   The TLS Client expetcs from the Cryptographic Service:
 
-   o  In addition to the keys necessary for the TLS Server, the TLS
-      Client may also need to provision the Cryptographic Service with
-      the resumption_master_secret, so the PSK can be provisioned.  This
-      is needed when the TLS Client is using session resumption using a
-      NewSession ticket.
+   o  To retrieve the necessary keys to complete the handshake.
 
-   o  Handshake message or extensions that authenticate the TLS Server.
-      This typically includes the CertificateVerify and Finished
-      message.
+   o  To "provision" resumption_master_secret, so the PSK can be used
+      when the TLS Client is using session resumption using a NewSession
+      ticket.
+
+   o  To generate of Handshake message or extensions that authenticate
+      the TLS Client.  This typically includes the CertificateVerify and
+      Finished message.
 
    Note that the TLS Server MAY interact with a single exchange with the
    Cryptographic Service, the TLS Client is expected to retrieve the
@@ -165,9 +163,11 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
 
 
 
-Migault                 Expires December 13, 2018               [Page 3]
+
+
+Migault                 Expires December 29, 2018               [Page 3]
 
-Internet-Draft                LURK/TLS 1.2                     June 2018
+Internet-Draft                LURK/TLS 1.3                     June 2018
 
 
    enum {
@@ -221,9 +221,9 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
 
 
 
-Migault                 Expires December 13, 2018               [Page 4]
+Migault                 Expires December 29, 2018               [Page 4]
 
-Internet-Draft                LURK/TLS 1.2                     June 2018
+Internet-Draft                LURK/TLS 1.3                     June 2018
 
 
 3.1.  Request Payload
@@ -253,7 +253,12 @@ struct {
 } KeyScheduleInputSecrets
 
 
+enum {
+    sha256 (0) (255)
+} PFSAlgorithm
+
 struct {
+    PFSAlgorithm pfs;  // {{I-D.mglt-lurk-tls12}} section 4.1
     TranscriptHash h;
     PskKeyExchangeMode ke_mode // {{I-D.ietf-tls-tls13}} section 4.2.9
     opaque handshake_context<0..2^32-1>
@@ -263,8 +268,19 @@ struct {
    psk_type  indicates how the PSK is provisioned to initiate the key
       schedule as described in [I-D.ietf-tls-tls13] section 7.1.  The
       type psk_raw indicates the PSK is explicitly provided.  The type
-      psk_ticket inidcates the PSK is generated from the ticket as
-      indicated in [I-D.ietf-tls-tls13] section 4.6.1.
+      psk_ticket indicates the PSK is generated from the ticket as
+      described in [I-D.ietf-tls-tls13] section 4.6.1.
+
+   pfs  the one-way hash function (OWHF) used by LURK to implement
+      Perfect Forward Secrecy.
+
+
+
+
+Migault                 Expires December 29, 2018               [Page 5]
+
+Internet-Draft                LURK/TLS 1.3                     June 2018
+
 
    h  the hash function used by the Transcript-Hash [I-D.ietf-tls-tls13]
       section 4.4.1.
@@ -272,15 +288,6 @@ struct {
    offered_psk  reuses the OfferedPsks described in [I-D.ietf-tls-tls13]
       section 4.2.11.  The PSK structure only allow a single PSK, thus
       OfferedPsks MUST represent a single PSK.
-
-
-
-
-
-Migault                 Expires December 13, 2018               [Page 5]
-
-Internet-Draft                LURK/TLS 1.2                     June 2018
-
 
    ke_mode  defines pre shared key exchange defined in
       [I-D.ietf-tls-tls13] section 4.2.9.  It indicates whether the key
@@ -302,7 +309,7 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
 
    struct {
        opaque server_handshake_key<0..2^32-1>
-   } HandshakeServerKeyRsponse
+   } HandshakeServerKeyResponse
 
    server_handshake_key  the server_handshake_key
 
@@ -318,6 +325,22 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
    With ServerHello as the input message, the LURK Client initiates the
    exchange as described below:
 
+   Perfect Forward Secrecy Setting:
+
+   o  Perfect Forward Secrecy is performed as described in
+      [I-D.mglt-lurk-tls12] section 4.1.1 over the client_random.  There
+      is no gmt_unix_time as such ServerHello.random is generated as
+
+
+
+Migault                 Expires December 29, 2018               [Page 6]
+
+Internet-Draft                LURK/TLS 1.3                     June 2018
+
+
+      follows: ~~~ ClientHello.random = pfs( client_random + "tls13_c
+      pfs" ); ~~~
+
    Transcript Hash Setting:
 
    o  the value for transcript hash is provided by the configuration.
@@ -329,14 +352,6 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
 
    o  if a key_share extension is present the LURK Client sets ke_mode
       to psk_dhe_ke.
-
-
-
-
-Migault                 Expires December 13, 2018               [Page 6]
-
-Internet-Draft                LURK/TLS 1.2                     June 2018
-
 
    Key Schedule Input Secret Setting:
 
@@ -357,12 +372,27 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
       provided via NewSessionTicket.  Upon receiving a selected_identity
       in the pre_shared_key extension, the LURK Client selects the
       corresponding local_ticket previously provided by the LURK Server
-      during the previous handshake.
+      during the previous handshake. local_ticket are internal structure
+      used by LURK detailled in Section 4.4.1
 
 3.4.  LURK Server Behavior
 
    Upon receiving a handshake_server_key request, the LURK server
    proceeds as follows:
+
+   Perfect Forward Secrecy Check:
+
+   o  if pfs is not supported, an invalid_pfs erroro is returned.
+
+   o  ClientHello.random is generated as described in Section 3.3 and
+      the value is provided in handshake_context.
+
+
+
+Migault                 Expires December 29, 2018               [Page 7]
+
+Internet-Draft                LURK/TLS 1.3                     June 2018
+
 
    Transcript-Hash Check:
 
@@ -384,15 +414,6 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
    operations:
 
    (EC)DHE Check:
-
-
-
-
-
-Migault                 Expires December 13, 2018               [Page 7]
-
-Internet-Draft                LURK/TLS 1.2                     June 2018
-
 
    o  if ke_mode is set to psk_dhe_ke and secret does not contain a
       (EC)DHE secret an invalid_secret error is returned.
@@ -422,6 +443,13 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
 
    Key Generation:
 
+
+
+Migault                 Expires December 29, 2018               [Page 8]
+
+Internet-Draft                LURK/TLS 1.3                     June 2018
+
+
    o  server_handshake_key is generated as described in
       [I-D.ietf-tls-tls13] section 7.1 and returned to the LURK Client.
 
@@ -432,27 +460,10 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
 
 4.1.  Request Payload
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-Migault                 Expires December 13, 2018               [Page 8]
-
-Internet-Draft                LURK/TLS 1.2                     June 2018
-
-
 enum { server (0), client (1), post-handshake (2) } HandshakeMode;
 
 struct {
+    PFSAlgorithm pfs;  // {{I-D.mglt-lurk-tls12}} section 4.1
     TranscriptHash h;  // c, f
     PskKeyExchangeMode ke_mode // {{I-D.ietf-tls-tls13}} section 4.2.9
     select( ke_mode ){
@@ -470,7 +481,8 @@ struct {
 c: structure used for the CertificateVerify message
 f: structure used for the Finished message
 
-   h, ke_mode, handshake_context and secrets are define in Section 3.1
+   pfs, h, ke_mode, handshake_context and secrets are define in
+   Section 3.1
 
    certificate  end point certificate defined in [I-D.ietf-tls-tls13]
       section 4.4.2.
@@ -485,6 +497,15 @@ f: structure used for the Finished message
       while the handshake_mode set to client or post-handshake indicates
       the LURK exchange is performed by the TLS Client.
 
+
+
+
+
+Migault                 Expires December 29, 2018               [Page 9]
+
+Internet-Draft                LURK/TLS 1.3                     June 2018
+
+
    handshake_context  Handshake Context has defined in
       [I-D.ietf-tls-tls13] section 4.4.
 
@@ -498,14 +519,6 @@ f: structure used for the Finished message
 
    ticket_number  indicates the expected number of session resumption
       tickets.  When requested by the TLS Client the ticket_number is
-
-
-
-Migault                 Expires December 13, 2018               [Page 9]
-
-Internet-Draft                LURK/TLS 1.2                     June 2018
-
-
       expected to be 0 or 1.  When requested by the TLS Server the
       number can be larger.
 
@@ -537,8 +550,17 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
 
    On a TLS Server, the LURK Server initiates the LURK exchange after
    receiving the ClientHello from the TLS Client.  The purpose of this
-   exchange is to retrieve the CertificateVerify, Finished, the
+   exchange is to retrieve the CertificateVerify, Finished, and the
    necessary keys to:
+
+
+
+
+
+Migault                 Expires December 29, 2018              [Page 10]
+
+Internet-Draft                LURK/TLS 1.3                     June 2018
+
 
    o  encrypt the EncryptedExtensions, Finished and optional
       CertificateRequest Certificate and CertificateVerify message:
@@ -554,13 +576,13 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
    o  decrypt the future Application Data message with the
       client__application_traffic_secret_N
 
+   Perfect Forward Secrecy Setting:
 
-
-
-Migault                 Expires December 13, 2018              [Page 10]
-
-Internet-Draft                LURK/TLS 1.2                     June 2018
-
+   o  Perfect Forward Secrecy is performed as described in
+      [I-D.mglt-lurk-tls12] section 4.1.1 over the server_random.  There
+      is no gmt_unix_time as such ServerHello.random is generated as
+      follows: ~~~ ServerHello.random = pfs( server_random + "tls13_s
+      pfs" ); ~~~
 
    The LURK Client proceeds to the Transcript Hash Setting PSK Key
    Exchange Mode Setting and the Key Schedule Input Secret Setting as
@@ -587,6 +609,15 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
    Upon receiving the AuthResponse, the TLS Server encrypts the messages
    and pursue the TLS handshake as defined in [I-D.ietf-tls-tls13].
 
+
+
+
+
+Migault                 Expires December 29, 2018              [Page 11]
+
+Internet-Draft                LURK/TLS 1.3                     June 2018
+
+
 4.4.  LURK Client Behavior (TLS Client)
 
    On a TLS Client the LURK Client initiates an AuthRequest in order to
@@ -606,17 +637,9 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
    the TLS Server by retrieving the server_handshake_traffic_secret with
    an HandshakeServerKeyRequest.
 
-   The LURK Client proceeds to the Transcript Hash Setting, Key Schedule
-   Input Secret Setting as described in Section 3.3.
-
-
-
-
-
-Migault                 Expires December 13, 2018              [Page 11]
-
-Internet-Draft                LURK/TLS 1.2                     June 2018
-
+   The LURK Client proceeds to Perfect Forward Secrecy Setting,
+   Transcript Hash Setting, Key Schedule Input Secret Setting as
+   described in Section 3.3.
 
    If the TLS Client has received a CertificateRequest from the TLS
    Server, the LURK Client:
@@ -643,6 +666,14 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
 
    Key Request Setting:
 
+
+
+
+Migault                 Expires December 29, 2018              [Page 12]
+
+Internet-Draft                LURK/TLS 1.3                     June 2018
+
+
    o  key_request SHOULD have the Bit 0 unset, as
       client_handshake_traffic_secret is already known by the TLS Client
 
@@ -666,21 +697,13 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
    The LURK Client is expected to manage the local_tickets as described
    in Section 4.4.1
 
-
-
-
-Migault                 Expires December 13, 2018              [Page 12]
-
-Internet-Draft                LURK/TLS 1.2                     June 2018
-
-
 4.4.1.  Local Ticket
 
-   ticket re-uses the NewSessionTicket structure in two different ways
-   depending if the LURK exchange is initiated by a TLS Client or by a
-   TLS Server.
+   local_ticket re-uses the NewSessionTicket structure in two different
+   ways depending if the LURK exchange is initiated by a TLS Client or
+   by a TLS Server.
 
-   o  ticket provided to the TLS Server ( by the LURK Server) are
+   o  ticket provided to the TLS Server (by the LURK Server) are
       new_session_ticket, expected to be forwarded to the TLS Client.
 
    o  tickets provided to the TLS Client ( by the LURK Server) are
@@ -689,8 +712,9 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
 
    During the initial handshake, the TLS Client has received a
    local_ticket from the LURK Server and a new_session_ticket from the
-   TLS Server.  The TLS Client local_ticket updates the ticket_nonce and
-   extensions fields with those of the new_session_ticket.
+   TLS Server.  The TLS Client updates the local_ticket as follows: the
+   ticket_nonce and extensions fields of the new_session_ticket are
+   copied to the local_ticket.
 
    When the TLS Server provides more than one new_session_ticket
    tickets, these tickets are expected to have different nonce.  On the
@@ -698,6 +722,13 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
    The TLS Client generates an associated local_ticket for each
    new_session_ticket.  All of them are generated from the local_ticket
    provided by the LURK Server.
+
+
+
+Migault                 Expires December 29, 2018              [Page 13]
+
+Internet-Draft                LURK/TLS 1.3                     June 2018
+
 
    Though the new_Session_ticket and the local_ticket have different
    meanings, a TLS Client will not be able to perform session resumption
@@ -718,17 +749,14 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
    Upon receiving a handshake_server_key request, the LURK server
    proceeds as follows:
 
+   Perfect Forward Secrecy Check is performed as Section 3.3 using the
+   pfs, and client_random (resp. server_random) as described in
+   Section 3.3 (resp.  Section 4.3).
+
    Transcript-Hash Check, PSKExchangeMode Check, KeyScheduleInputSecrets
-   Check are performed as described in {{hsh-srv}
+   Check are performed as described in Section 3.4
 
    HandshakeMode Check:
-
-
-
-Migault                 Expires December 13, 2018              [Page 13]
-
-Internet-Draft                LURK/TLS 1.2                     June 2018
-
 
    o  if the mode is not supported a invalid_handshake_mode error is
       returned.  This typically prevents a TLS Client to perform
@@ -749,6 +777,14 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
 
    o  if ke_mode is set to psk_dhe_ke and the algorithm is not supported
       an invalid_signature_scheme error is returned
+
+
+
+
+Migault                 Expires December 29, 2018              [Page 14]
+
+Internet-Draft                LURK/TLS 1.3                     June 2018
+
 
    Keys are generated as described in [I-D.ietf-tls-tls13] section 7.1.
    This includes the Base Key use to generate the Finished messages as
@@ -776,16 +812,6 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
    The LURK Server MUST have a zero length ticket_nonce and zero length
    extensions
 
-
-
-
-
-
-Migault                 Expires December 13, 2018              [Page 14]
-
-Internet-Draft                LURK/TLS 1.2                     June 2018
-
-
    When the LURK exchange is initiated by the TLS Server the tickets are
    new_session_tickets as described in [I-D.ietf-tls-tls13] section
    4.6.1.  As a result:
@@ -802,13 +828,19 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
 
 5.  Security Considerations
 
-   When ECDHE is used, a passive listener will not be able to replay a
-   LURK request to the LURK Server.  It will not be able to get the
-   ECDHE secret.
-
-   Without ECDHE
-
 6.  IANA Considerations
+
+
+
+
+
+
+
+
+Migault                 Expires December 29, 2018              [Page 15]
+
+Internet-Draft                LURK/TLS 1.3                     June 2018
+
 
 7.  Acknowledgments
 
@@ -829,18 +861,6 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
               in progress), February 2018.
 
 Author's Address
-
-
-
-
-
-
-
-
-Migault                 Expires December 13, 2018              [Page 15]
-
-Internet-Draft                LURK/TLS 1.2                     June 2018
-
 
    Daniel Migault
    Ericsson
@@ -873,24 +893,4 @@ Internet-Draft                LURK/TLS 1.2                     June 2018
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Migault                 Expires December 13, 2018              [Page 16]
+Migault                 Expires December 29, 2018              [Page 16]
