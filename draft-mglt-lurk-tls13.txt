@@ -4,11 +4,11 @@
 
 LURK                                                          D. Migault
 Internet-Draft                                                  Ericsson
-Intended status: Standards Track                           June 27, 2018
-Expires: December 29, 2018
+Intended status: Standards Track                           July 02, 2018
+Expires: January 3, 2019
 
 
-         LURK Extension version 1 for (D)TLS 1.2 Authentication
+         LURK Extension version 1 for (D)TLS 1.3 Authentication
                         draft-mglt-lurk-tls13-00
 
 Abstract
@@ -32,7 +32,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on December 29, 2018.
+   This Internet-Draft will expire on January 3, 2019.
 
 Copyright Notice
 
@@ -53,9 +53,9 @@ Copyright Notice
 
 
 
-Migault                 Expires December 29, 2018               [Page 1]
+Migault                  Expires January 3, 2019                [Page 1]
 
-Internet-Draft                LURK/TLS 1.3                     June 2018
+Internet-Draft                LURK/TLS 1.3                     July 2018
 
 
 Table of Contents
@@ -109,9 +109,9 @@ Table of Contents
 
 
 
-Migault                 Expires December 29, 2018               [Page 2]
+Migault                  Expires January 3, 2019                [Page 2]
 
-Internet-Draft                LURK/TLS 1.3                     June 2018
+Internet-Draft                LURK/TLS 1.3                     July 2018
 
 
    o  To retrieve NewSessionTicket to enable the TLS Client to perform
@@ -165,9 +165,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2018
 
 
 
-Migault                 Expires December 29, 2018               [Page 3]
+Migault                  Expires January 3, 2019                [Page 3]
 
-Internet-Draft                LURK/TLS 1.3                     June 2018
+Internet-Draft                LURK/TLS 1.3                     July 2018
 
 
    enum {
@@ -221,9 +221,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2018
 
 
 
-Migault                 Expires December 29, 2018               [Page 4]
+Migault                  Expires January 3, 2019                [Page 4]
 
-Internet-Draft                LURK/TLS 1.3                     June 2018
+Internet-Draft                LURK/TLS 1.3                     July 2018
 
 
 3.1.  Request Payload
@@ -277,9 +277,9 @@ struct {
 
 
 
-Migault                 Expires December 29, 2018               [Page 5]
+Migault                  Expires January 3, 2019                [Page 5]
 
-Internet-Draft                LURK/TLS 1.3                     June 2018
+Internet-Draft                LURK/TLS 1.3                     July 2018
 
 
    h  the hash function used by the Transcript-Hash [I-D.ietf-tls-tls13]
@@ -333,9 +333,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2018
 
 
 
-Migault                 Expires December 29, 2018               [Page 6]
+Migault                  Expires January 3, 2019                [Page 6]
 
-Internet-Draft                LURK/TLS 1.3                     June 2018
+Internet-Draft                LURK/TLS 1.3                     July 2018
 
 
       follows: ~~~ ClientHello.random = pfs( client_random + "tls13_c
@@ -389,9 +389,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2018
 
 
 
-Migault                 Expires December 29, 2018               [Page 7]
+Migault                  Expires January 3, 2019                [Page 7]
 
-Internet-Draft                LURK/TLS 1.3                     June 2018
+Internet-Draft                LURK/TLS 1.3                     July 2018
 
 
    Transcript-Hash Check:
@@ -445,9 +445,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2018
 
 
 
-Migault                 Expires December 29, 2018               [Page 8]
+Migault                  Expires January 3, 2019                [Page 8]
 
-Internet-Draft                LURK/TLS 1.3                     June 2018
+Internet-Draft                LURK/TLS 1.3                     July 2018
 
 
    o  server_handshake_key is generated as described in
@@ -501,9 +501,9 @@ f: structure used for the Finished message
 
 
 
-Migault                 Expires December 29, 2018               [Page 9]
+Migault                  Expires January 3, 2019                [Page 9]
 
-Internet-Draft                LURK/TLS 1.3                     June 2018
+Internet-Draft                LURK/TLS 1.3                     July 2018
 
 
    handshake_context  Handshake Context has defined in
@@ -557,9 +557,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2018
 
 
 
-Migault                 Expires December 29, 2018              [Page 10]
+Migault                  Expires January 3, 2019               [Page 10]
 
-Internet-Draft                LURK/TLS 1.3                     June 2018
+Internet-Draft                LURK/TLS 1.3                     July 2018
 
 
    o  encrypt the EncryptedExtensions, Finished and optional
@@ -613,9 +613,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2018
 
 
 
-Migault                 Expires December 29, 2018              [Page 11]
+Migault                  Expires January 3, 2019               [Page 11]
 
-Internet-Draft                LURK/TLS 1.3                     June 2018
+Internet-Draft                LURK/TLS 1.3                     July 2018
 
 
 4.4.  LURK Client Behavior (TLS Client)
@@ -669,9 +669,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2018
 
 
 
-Migault                 Expires December 29, 2018              [Page 12]
+Migault                  Expires January 3, 2019               [Page 12]
 
-Internet-Draft                LURK/TLS 1.3                     June 2018
+Internet-Draft                LURK/TLS 1.3                     July 2018
 
 
    o  key_request SHOULD have the Bit 0 unset, as
@@ -725,9 +725,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2018
 
 
 
-Migault                 Expires December 29, 2018              [Page 13]
+Migault                  Expires January 3, 2019               [Page 13]
 
-Internet-Draft                LURK/TLS 1.3                     June 2018
+Internet-Draft                LURK/TLS 1.3                     July 2018
 
 
    Though the new_Session_ticket and the local_ticket have different
@@ -781,9 +781,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2018
 
 
 
-Migault                 Expires December 29, 2018              [Page 14]
+Migault                  Expires January 3, 2019               [Page 14]
 
-Internet-Draft                LURK/TLS 1.3                     June 2018
+Internet-Draft                LURK/TLS 1.3                     July 2018
 
 
    Keys are generated as described in [I-D.ietf-tls-tls13] section 7.1.
@@ -837,9 +837,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2018
 
 
 
-Migault                 Expires December 29, 2018              [Page 15]
+Migault                  Expires January 3, 2019               [Page 15]
 
-Internet-Draft                LURK/TLS 1.3                     June 2018
+Internet-Draft                LURK/TLS 1.3                     July 2018
 
 
 7.  Acknowledgments
@@ -893,4 +893,4 @@ Author's Address
 
 
 
-Migault                 Expires December 29, 2018              [Page 16]
+Migault                  Expires January 3, 2019               [Page 16]
