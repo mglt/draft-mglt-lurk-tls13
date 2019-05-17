@@ -22,8 +22,10 @@ enum {
 
 struct {
     select (TLS13Type) {
-        case binder_key, early_secrets, handshake_and_app_secrets, 
-            handshake_secrets, app_secrets: SecretRequest;
+        case binder_key, early_secrets, app_secrets: 
+            SecretRequest;
+        case handshake_and_app_secrets, handshake_secret: 
+            HandshakeSecretRequest
         case init_certificate_verify, cerificate_verify, post_handshake: 
             CertificateVerifyRequest; 
         case new_session_ticket:  NewSessionTicketRequest;
@@ -68,6 +70,8 @@ is set when the TLS server provides session resumption or when the TLS
 client wants to perform session resumption. When session_resumption is
 set, psk MUST be set.
 
+
+COMMENT replace dhe by sig
 dhe:
 is set when DHE authentication is accepted. By default dhe is set. 
 
@@ -149,52 +153,49 @@ LURK Client on the TLS server
 
 The key scheduler context (ks_ctx) handles the communication between the LURK client and the LURK server during a given TLS Handshake. It contains the necessary parameter to handle the communication. This includes among other the necessary variable to provide PFS as well as making the ctx_id unpredictable. 
 
-received    
-ClientHello 
-      ----> 
+                 TLS Server Policy for authentication
+received      PSK, PSK-ECDHE,                    ECDHE
+ClientHello            |                           |
+      ---->            v                           v
             /----------------------\ NO  /----------------------\ NO  
-            | psk_proposed and psk |---->| dhe_proposed and dhe |----+  
-            \----------------------/     \----------------------/    |  
-                   YES v                       YES |                 |
-            +----------------------+               |                 |
-            | Init ks_ctx          |               |                 |
-            +----------------------+               |                 |
-                       v                           |                 v
-            +---------------------+                |        +---------------+    
-            | EarlySecret         |                |        | TLS handshake | 
-            +---------------------+                |        | aborted       | 
-                       |                           |        +---------------+
-            /----------------------\ NO            |        +---------------+            
-            | Selected PSK         |----------------------->| Delete ks_ctx |
-            \----------------------/               |        +---------------+
-                   YES v                           |
-            /----------------------\ NO            |           
-            | dhe_proposed and dhe |------+        +---------------+ 
-            \----------------------/      |                        |
-to be formed       YES v                  v                        v 
-ServerHello +-------------------+-----------------------+-----------------------+  
-      ----> | CertificateVerify | HandshakeAndAppSecret | InitCertificateVerify |          
-            +-------------------+-----------------------+-----------------------+ 
-                      |                   |                       |
-                      +-------------------+-----------------------+
-ServerHello                               v
-      <----                      /--------------------\ NO                            
-                                 | session_resumption |------+
-                                 \--------------------/      |
-                                      YES |                  |
-                                          +----------------+ |
-                                          v                | | 
-client Finished                  +--------------------+    | |
-      ---->                      | NewSessionTickets  |    | |
-                                 +--------------------+    | |
-                                          v                | |
-                                 /--------------------\ NO | |                         
-                                 |      finished      |----+ |
-                                 \--------------------/      |
-                                      YES v                  v 
-                                 +----------------------------------+               
-                                 |      LURK exchanges Finished     |               
-                                 +----------------------------------+
+            | psk_proposed and psk |---+ | dhe_proposed and dhe |----+  
+            \----------------------/   | \----------------------/    |  
+                   YES v               |        YES |                |
+            +----------------------+   | +----------------------+    |
+            | Init ks_ctx          |   | | Init ks_ctx          |    |
+            +----------------------+   | +----------------------+    |
+                       v               |            |                v
+            +---------------------+    |            |        +-------+    
+            | EarlySecret         |    |            |        | ERROR |
+            +---------------------+    +-------------------->|       | 
+                       |                            |        +-------+
+            /----------------------\ NO             |        +---------------+            
+            | Selected PSK         |------------------------>| Delete ks_ctx |
+            \----------------------/                |        +---------------+
+to be formed       YES v                            v             
+ServerHello +-----------------------+    +-----------------------+  
+      ----> | HandshakeAndAppSecret |    | InitCertificateVerify |          
+            +-----------------------+    +-----------------------+ 
+                      |                             |
+                      +-----------------------------+
+ServerHello           v
+      <---- /--------------------\ NO                            
+            | session_resumption |------+
+            \--------------------/      |
+                 YES |                  |
+                     +----------------+ |
+client               v                | | 
+Finished    +--------------------+    | |
+      ----> | NewSessionTickets  |    | |
+            +--------------------+    | |
+                     v                | |
+            /--------------------\ NO | |                         
+            |      finished      |----+ |
+            \--------------------/      |
+                 YES v                  v 
+            +----------------------------------+               
+            |      LURK exchanges Finished     |               
+            +----------------------------------+
    
 
 
@@ -268,22 +269,21 @@ elif TLS13Request.type is new_session_tickets:
              |                                  |                |  |
              +<---------------------------------+----------------+  |
              v                                                      |
-/---------------------------\                                       |
-| TLS13request.type in      |                                       |
-| ks_ctx.next_request       |                                       |
+/---------------------------\ NO +-------+                          |
+| TLS13request.type in      |----| ERROR |                          |
+| ks_ctx.next_request       |    +-------+                          |
 \---------------------------/                                       |
-             v                                                      |
+         YES v                                                      |
 +---------------------------+                                       |
 | process TLS13Request      |                                       |
-| update CTX_ID_DB, key     |                                       |
-| schedule context, PSK_DB  |                                       |
 +---------------------------+                                       |
              v                                                      |
-/---------------------------\ NO                                    |
-| finished                  |---------------------------------------+
-\---------------------------/
-         YES v
-+---------------------------+
+/---------------------------\ NO +------------------+               |
+| finished                  |----| update CTX_ID_DB |---------------+ 
+\---------------------------/    | update ks_ctx    |               
+         YES v                   +------------------+               
++---------------------------+                                       
+| update CTX_ID_DB, PSK_DB  |                                       
 | delete ks_tcx             |
 +---------------------------+
 
@@ -323,36 +323,32 @@ PostHandshake.key_request:
 
 LURK client on the TLS client 
 
-
-            +----------------------+
-            | Init TLS Handshake   |
-            +----------------------+
-                       v
-            /----------------------\ NO   
-            | psk_proposed and psk |------+ 
-            \----------------------/      |  
-                   YES v                  |
-            +--------------------+        |
-            | select psk         |        |
-            +--------------------+        |
-                       v                  |
-            +--------------------+        |
-            | BinderKey          |        |
-            +--------------------+        |
-                       v                  |    
-            /------------------------\ NO |    
-            | 0rtt_proposed and 0rtt |--->+   
-            | or early_exporter      |    |
-            \------------------------/    |   
-                   YES v                  |   
-            +--------------------+        |
-            |    EarlySecret     |        |
-            +--------------------+        |    
-ClientHello            |                  |
-<----                  +<-----------------+
-                   YES v                  
-ServerHello /--------------------\ NO          
-      ----> | CertificateRequest |------+
+              TLS Client Policy for authentication
+              PSK, PSK-ECDHE                    ECDHE-authentication only
+                       |                           |
+              psk      |                           |
+               v       v                           |
+            +--------------------+                 |
+            | BinderKey          |                 |
+            +--------------------+                 |
+                       v                           |
+            /------------------------\ NO          |
+            | 0rtt_proposed and 0rtt |--->+        | 
+            | or early_exporter      |    |        |
+            \------------------------/    |        |
+                   YES v                  |        |
+            +--------------------+        |        |
+            |    EarlySecret     |        |        |
+            +--------------------+        |        |
+ClientHello            |                  |        |
+<----                  +<-----------------+--------+
+ServerHello        YES v 
+      ----> +--------------------+
+            |  HandshakeSecret   |
+            +--------------------+
+                       |
+            /--------------------\ NO          
+            | CertificateRequest |------+
             \--------------------/      |
                    YES v                v
             +-------------------+-----------------+
@@ -426,7 +422,7 @@ elif TLS13Request.type in [app_secret, certificate_verify, post_handshake, regis
              v                                                      |
 /---------------------------\    /-----------------------------\    |
 | type is (binder_key or    | NO | type is (early_secret or    | NO | 
-| handshake_secret)         |----| or chandshake_secret or     |--+ |
+| handshake_secret)         |----| or handshake_secret or      |--+ |
 | and ctx_type is psk       |    | app_secret or               |  | |
 \---------------------------/    | certificate_verify or       |  | |
          YES |                   | register_session_tickets or |  | |
@@ -472,56 +468,51 @@ elif TLS13Request.type in [app_secret, certificate_verify, post_handshake, regis
 
 
 
-| Role   | Type                   |ctx_type|  key_request                         | handshake_context            | Condition          | Comments                                |
-#| server | BinderKey              | psk    | binder_key                           |                              | psk_proposed and   | Do we need that ? 
-#|        |                        |        |                                      |                              | !server_only_dhe   | It would avoid providing unnecessarily the ClientHello  
-#|        |                        |        |                                      |                              | ! server_0rtt      |
+| Role   | Type                   |ctx_type|  key_request                         | handshake_context            | Condition         |
 
-| server | EarlySecret            | psk    | binder_key*                          |ClientHello                   | psk_proposed and   |  
-|        |                        |        | client_early_traffic_secret*         |                              | !server_only_dhe   |  
-|        |                        |        | early_exporter_master_secret*        |                              | and server_0rtt    |   
-                                                                                                                 
-| server | InitCertificateVerify  | psk    | client_handshake_traffic_secrets     |ClientHello ... later of      | !psk_proposed or   | CertificateVerify, Finished generated   |  
-|        |                        |        | server_handshake_traffic_secrets     |server EncryptedExtensions /  | server_only_dhe    | by the Cryptographic Service.           |
-|        |                        |        | client_application_traffic_secret_0* |CertificateRequest            |                    | Certificate provided as arguments.      |          
-|        |                        |        | server_application_traffic_secret_0* |                              |                    |  
-|        |                        |        | exporter_master_secret*              |                              |                    |          
+| server | EarlySecret            | init   | binder_key*                          |ClientHello                   | psk_proposed and  | 
+|        |                        |        | client_early_traffic_secret*         |                              | !server_only_dhe  |
+|        |                        |        | early_exporter_master_secret*        |                              | and server_0rtt   |
+                                                                                                                                     
+| server | InitCertificateVerify  | init   | client_handshake_traffic_secrets     |ClientHello ... later of      | !psk_proposed or  |  
+|        |                        |        | server_handshake_traffic_secrets     |server EncryptedExtensions /  | server_only_dhe   |
+|        |                        |        | client_application_traffic_secret_0* |CertificateRequest            |                   |          
+|        |                        |        | server_application_traffic_secret_0* |                              |                   | 
+|        |                        |        | exporter_master_secret*              |                              |                   |
                                                                                    
+| server |HandshakeAndAppSecret   | opaque | client_handshake_traffic_secrets     |ServerHello ... later of      | psk_selected      |                   
+|        |                        |        | server_handshake_traffic_secrets     |server EncryptedExtensions /  | !dhe_server       |        
+|        |                        |        | client_application_traffic_secret_0* |CertificateRequest            |                   | 
+|        |                        |        | server_application_traffic_secret_0* |                              |                   |
+|        |                        |        | exporter_master_secret*              |                              |                   |
+                                                                                    
+| server | NewSessionTickets      | opaque |                                      |earlier of client Certificate | server_resumption | 
+|        |                        |        |                                      |client CertificateVErify ...  |                   |
+|        |                        |        |                                      |client Finished               |                   |
+
+
+| client | BinderKey              | init   | binder_key                           |                              | psk_proposed      |
                                                                                    
-| server | CertificateVerify      | opaque | client_handshake_traffic_secrets     |ServerHello ... later of      | psk_proposed and   | When binder_key or early traffic has    | 
-|        |                        |        | server_handshake_traffic_secrets     |server EncryptedExtensions /  | !server_only_dhe   | previously been requested.              |
-|        |                        |        | client_application_traffic_secret_0* |CertificateRequest            | and dhe_server     | CertificateVerify, Finished generated   |
-|        |                        |        | server_application_traffic_secret_0* |                              |                    | by the Cryptographic Service.           |
-|        |                        |        | exporter_master_secret*              |                              |                    | Certificate is provided as arguments    |
+| client | EarlySecret            | opaque | client_early_traffic_secret*         |ClientHello                   | psk_proposed and  |
+|        |                        |        | early_exporter_master_secret*        |                              | client_0rtt       |
                                                                                    
-| server |HandshakeAndAppSecret   | opaque | client_handshake_traffic_secrets     |ServerHello ... later of      | psk_selected       | binder_key has been requested.          |                   
-|        |                        |        | server_handshake_traffic_secrets     |server EncryptedExtensions /  | !dhe_server        | Finished generated by the Cryptographic |        
-|        |                        |        | client_application_traffic_secret_0* |CertificateRequest            |                    | Service                                 | 
-|        |                        |        | server_application_traffic_secret_0* |                              |                    |                 
-|        |                        |        | exporter_master_secret*              |                              |                    |
-                                                                                   
-| server | NewSessionTickets      | opaque | session_tickets                      |client Finished               | server_resumption  |
-                                                                                   
-| client | BinderKey              | psk    | binder_key                           |                              | psk_proposed       | Required when pre_share_key is present. |
-                                                                                   
-| client | EarlySecret            | opaque | client_early_traffic_secret*         |ClientHello                   | psk_proposed and   | 
-|        |                        |        | early_exporter_master_secret*        |                              | client_0rtt                   | 
-                                                                                   
-| client | HandshakeSecret        | psk    | client_handshake_traffic_secret      |                              |                    | 
-|        |                        | opaque | server_handshake_traffic_secret      |ServerHello                   |                    |
+| client | HandshakeSecret        | init   | client_handshake_traffic_secret      |                              |                   |
+|        |                        | opaque | server_handshake_traffic_secret      |ServerHello                   |                   | 
 |                                                                                                                
                                                                                    
-| client | AppSecret              | opaque | client_application_traffic_secret_0* |server EncryptedExtensions ...| !client_dhe
-|        |                        |        | server_application_traffic_secret_0* |server Finished               |
-|        |                        |        | exporter_master_secret*              |                              | 
+| client | AppSecret              | opaque | client_application_traffic_secret_0* |server EncryptedExtensions ...| !client_dhe       |
+|        |                        |        | server_application_traffic_secret_0* |server Finished               |                   |
+|        |                        |        | exporter_master_secret*              |                              |                   |
                                                                                                                  
-| client | CertificateVerify      | opaque | client_application_traffic_secret_0* |server EncryptedExtensions ...| client_dhe          | TLS Client finished the handshake 
-|        |                        |        | server_application_traffic_secret_0* |later of server Finished/     |                     | before reading the application data.
-|        |                        |        | exporter_master_secret*              |EndOfEarlyData                |                     | in the case of 0RTT
+| client | CertificateVerify      | opaque | client_application_traffic_secret_0* |server EncryptedExtensions ...| client_dhe        |
+|        |                        |        | server_application_traffic_secret_0* |later of server Finished/     |                   |
+|        |                        |        | exporter_master_secret*              |EndOfEarlyData                |                   |
                                                                                    
-| client | RegisterSessionTickets | opaque |                                      |client Finished*              | client_resumption  | May not need this.
-|        |                        |        |                                      |                              | or post-handshake  |
-| client | PostHandshake          | opaque |                                      |CertificateRequest            | post-handshake     |
+| client | RegisterSessionTickets | opaque |                                      |earlier of client Certificate | client_resumption |
+|        |                        |        |                                      |client CertificateVErify ...  | or post-handshake |
+|        |                        |        |                                      |client Finished               |                   | 
+
+| client | PostHandshake          | opaque |                                      |CertificateRequest            | post-handshake    |
 
 
 
@@ -540,15 +531,17 @@ struct {
        case init_id:
            HasPSK has_psk
            select(has_psk) {
-               case true: PskIdentity psk_id;
+               case true: PskIdentity psk_id; //RFC8446 section 4.2.11
             }
 ##           Role role;
            PFSAlgorithm freshness_funct;  // {{!I-D.mglt-lurk-tls12}} section 4.1
            PFSAlgorithm h_ctx_id
-##           session_resumption // generates session_resumption and store it, with Hash algorithm /// configuration parameters
+           unint32 session_id 
+           session_resumption // generates session_resumption and store it, with Hash algorithm /// configuration parameters
 ##           post-handshake    // keep the full exchange -- derived from clientHello
 ##           0rtt // derived from client hello (early_data extension), serverHello (early_data extension) EndOfEarlydata, psk
        case opaque_id:
+           unint32 session_id;     
            unint32 context_id;     
 } ContextID;
 
@@ -571,51 +564,74 @@ struct {
     opaque secret_data<0..2^8-1>;
 } Secret;
 
+enum { tls13(0), sha256_32(1) (255)}; LURKCertificateType 
+
+struct {
+    lurk_certificate_type;
+    select (lurk_certificate_type) {
+        case sha256_32: 
+            uint32 hash_cert;
+        case tls13:
+            Certificate tls13_certificate; // RFC8446 section 4.4.2
+    };
+} LURKCertificate;
 
 
 struct {
-    ContextID ctx_id
-    uint16 key_request 
-    Handshake handshake_context<0..2^32> 
-} SecretsRequest
+    ContextID ctx_id;
+    uint16 key_request; 
+    Handshake handshake_context<0..2^32> //RFC8446 section 4.
+} SecretsRequest;
 
 
 struct {
     Secret secret_list<0..2^16-1>;
-    select(SecretRequest.ContextID.ctx_type) {
-        case psk_id:
-            uint32 ctx_id; 
+    select(SecretRequest.ctx_id.context_type) {
+        case init:
+            uint32 session_id
     };
-} SecretsResponse
+} SecretsResponse;
 
+
+### PCKS10 ?
+EphemeralSecret{
+
+}
 
 struct {
     SecretsRequest secret_request;
-    KeyPairId key_id;
-    SignatureScheme sig_algo;
-    Certificate certificate
-} CertificateVerify;
-
+    EphemeralSecret ephemeral_secret; 
+} HandshakeSecretRequest
 
 struct {
+    HandshakeSecretsRequest handshake_request;
+    KeyPairId key_id;
+    SignatureScheme sig_algo; //RFC8446 section 4.2.3.
+    LURKCertificate certificate   //RFC8446 section 4.4.2.
+} CertificateVerifyRequest;
+
+
+struct {                     
     SecretsResponse secret_response;
-    opaque signature<0..2^16-1>;
+    opaque signature<0..2^16-1>; //RFC8446 section 4.4.3.
+    Finished finished            // RFC8446 section 4.4.4.
 } CertificateVerifyResponse;
 
 
 struct {
-    ContextID ctx_id
-    uint8 ticket_nbr 
+    ContextID ctx_id;
+    uint8 ticket_nbr;
+    Handshake handshake_context<0..2^32> //RFC8446 section 4.
 } NewSessionTicketRequest; 
 
 struct {
-    NewSessionTicket ticket_list<0..2^16-1>; 
+    NewSessionTicket ticket_list<0..2^16-1>; //RFC8446 section 4.6.1.
 } NewSessionTicketResponse; 
 
 struct {
     ContextID ctx_id
-    Handshake handshake_context<0..2^32> 
-    NewSessionTicket ticket_list<0..2^16-1>; 
+    Handshake handshake_context<0..2^32>     //RFC8446 section 4.
+    NewSessionTicket ticket_list<0..2^16-1>; //RFC8446 section 4.6.1.
 } RegisterSessionTicket;
 
 
