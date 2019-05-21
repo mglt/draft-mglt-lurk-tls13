@@ -186,9 +186,9 @@ ServerHello           v
                      +----------------+ |
 client               v                | | 
 Finished    +--------------------+    | |
-      ----> | NewSessionTickets  |    | |
-            +--------------------+    | |
-                     v                | |
+or    ----> | NewSessionTickets  |    | |
+other       +--------------------+    | |
+trigger              v                | |
             /--------------------\ NO | |                         
             |      finished      |----+ |
             \--------------------/      |
@@ -241,47 +241,48 @@ elif TLS13Request.type is new_session_tickets:
 
         TLS13Request
              |
-             +<-----------------------------------------------------+
-             |                                                      |
-             v                                                      |
-/---------------------------\    /-----------------------------\    |
-| type is (early_secret or  | NO | type is (certificate_verify | NO | 
-| init_certificate_verify)  |----| or handshake_and_app_secret |--+ |
-| and ctx_type is init_id   |    | or new_session_ticket)      |  | |
-\---------------------------/    | ctx_type is opaque          |  | |
-         YES |                   \-----------------------------/  | |
-             v                              YES |                 | |              
-/---------------------------\ NO                |                 | |
-| psk in PSK_DB             |-------------------------------------+ |
-\---------------------------/                   v                 | |
-         YES v                   /---------------------------\ NO | |    +-------+  
-+---------------------------+    | ctx_id in CTX_ID_DB       |----+----->| ERROR |       
-| Init key schedule context |    \---------------------------/      |    +-------+ 
-+---------------------------+               YES v                   |
-             v                   /---------------------------\ NO   |              
-+---------------------------+    | ks_ctx is pending         |---+  |              
-| state=pending             |    \---------------------------/   |  |              
-| set psk_proposed,         |               YES v                |  |
-| set dhe_proposed,         |    +----------------------------+  |  |  
-| 0rtt_proposed             |    |  ks_ctx.state=selected     |  |  |
-| post_handshake_proposed   |    |(del related pending ks_ctx)|  |  |
-+---------------------------+    +----------------------------+  |  |
-             |                                  |                |  |
-             +<---------------------------------+----------------+  |
-             v                                                      |
-/---------------------------\ NO +-------+                          |
-| TLS13request.type in      |----| ERROR |                          |
-| ks_ctx.next_request       |    +-------+                          |
-\---------------------------/                                       |
-         YES v                                                      |
-+---------------------------+                                       |
-| process TLS13Request      |                                       |
-+---------------------------+                                       |
-             v                                                      |
-/---------------------------\ NO +------------------+               |
-| finished                  |----| update CTX_ID_DB |---------------+ 
-\---------------------------/    | update ks_ctx    |               
-         YES v                   +------------------+               
+(PSK,        +<------------------------------------------------------------------------------------+
+PSK-ECDHE)   |                              ECDHE                                                  |
+/---------------------------\    /---------------------------\    /--------------------------\     |
+| type is early_secret and  | NO | type is init_cert_verify_ | NO | type is (handshake or    |     |
+| and ctx_type is init_id   |--->| and ctx_type is  init_id  |--->| handshake_and_app_secret)|     |
+| and psk_proposed and psk  |    | and dhe and dhe_proposed  |    | and ctx_type is opaque   |     |
+\---------------------------/    \---------------------------/    \--------------------------/     |
+        YES  v                         YES  v                            YES v                     |       
+/---------------------------\NO  /---------------------------\NO  /--------------------------\NO   |
+| psk and psk_proposed      |--+ | and dhe and dhe_proposed  |--+ | ctx_id in CTX_ID_DB      |---+ |
+| psk_key in PSK_DB         |  | \---------------------------/  v \--------------------------/   v |
+\---------------------------/  +------------|-------------------+------------|-------------------+ |
+             |                          YES |      +-------+    |        YES v                     |
+             +------------------------------+      | Error |<---+ /--------------------------\     |   
+         YES v                                     +-------+      | ks_ctx is pending        |---+ | 
++---------------------------+                                     \--------------------------/   | | 
+| Init key schedule context |                                            YES v                   | |
++---------------------------+                                     +----------------------------+ | |    
+             v                                                    |  ks_ctx.state=selected     | | |         
++---------------------------+                                     |(del related pending ks_ctx)| | |         
+| state=pending             |                                     +----------------------------+ | |         
+| set psk_proposed,         |                                                |                   | |
+| set dhe_proposed,         |                                                +<------------------+ |
+| 0rtt_proposed             |                                                |                     |
+| post_handshake_proposed   |                                                |                     |
++---------------------------+                                                |                     |
+             |                                                               |                     |
+             +<--------------------------------------------------------------+                     |
+             v                                                                                     |
+/---------------------------\ NO +-------+                                                         |
+| TLS13request.type in      |----| ERROR |                                                         |
+| ks_ctx.next_request       |    +-------+                                                         |
+\---------------------------/                                                                      |
+         YES v                                                                                     |
++---------------------------+                                                                      |
+| process TLS13Request      |                                                                      |
++---------------------------+                                                                      |
+             v                                                                                     |
+/---------------------------\ NO +------------------+                                              |
+| finished                  |----| update CTX_ID_DB |----------------------------------------------+ 
+\---------------------------/    | update ks_ctx    |                                                               
+         YES v                   +------------------+                                                               
 +---------------------------+                                       
 | update CTX_ID_DB, PSK_DB  |                                       
 | delete ks_tcx             |
@@ -324,7 +325,7 @@ PostHandshake.key_request:
 LURK client on the TLS client 
 
               TLS Client Policy for authentication
-              PSK, PSK-ECDHE                    ECDHE-authentication only
+              PSK, PSK-ECDHE                    ECDHE
                        |                           |
               psk      |                           |
                v       v                           |
@@ -333,7 +334,7 @@ LURK client on the TLS client
             +--------------------+                 |
                        v                           |
             /------------------------\ NO          |
-            | 0rtt_proposed and 0rtt |--->+        | 
+            | 0rtt_proposed and 0rtt |--->+        |  /// politique du TLS client
             | or early_exporter      |    |        |
             \------------------------/    |        |
                    YES v                  |        |
@@ -417,49 +418,63 @@ elif TLS13Request.type in [app_secret, certificate_verify, post_handshake, regis
 
         TLS13Request
              |
-             +<-----------------------------------------------------+
-             |                                                      |
-             v                                                      |
-/---------------------------\    /-----------------------------\    |
-| type is (binder_key or    | NO | type is (early_secret or    | NO | 
-| handshake_secret)         |----| or handshake_secret or      |--+ |
-| and ctx_type is psk       |    | app_secret or               |  | |
-\---------------------------/    | certificate_verify or       |  | |
-         YES |                   | register_session_tickets or |  | |
-             |                   | post_handshake) and         |  | |
-             |                   | ctx_type is opaque          |  | |
-             v                   \-----------------------------/  | |
-/---------------------------\ NO            YES |                 | |
-| psk in PSK_DB             |-------------------------------------+ |
-\---------------------------/                   v                 | |
-         YES v                   /---------------------------\ NO | |    +-------+  
-+---------------------------+    | ctx_id in CTX_ID_DB       |----+----->| ERROR |       
-| Init key schedule context |    \---------------------------/      |    +-------+ 
-+---------------------------+               YES v                   |
-             v                   /---------------------------\ NO   |              
-+---------------------------+    | ks_ctx is pending         |---+  |              
-| state=pending             |    \---------------------------/   |  |              
-| psk_proposed,             |               YES v                |  |
-| set dhe_proposed,         |    +----------------------------+  |  |  
-| 0rtt_proposed             |    |  ks_ctx.state=selected     |  |  |
-| post_handshake_proposed   |    |                            |  |  |
-+---------------------------+    +----------------------------+  |  |
-             |                                  |                |  |
-             +<---------------------------------+----------------+  |
-             v                                                      |
-/---------------------------\                                       |
-| TLS13request.type in      |                                       |
-| ks_ctx.next_request       |                                       |
-\---------------------------/                                       |
-             v                                                      |
-+---------------------------+                                       |
-| process TLS13Request      |                                       |
-| update CTX_ID_DB, key     |                                       |
-| schedule context, PSK_DB  |                                       |
-+---------------------------+                                       |
-             v                                                      |
-/---------------------------\ NO                                    |
-| finished                  |---------------------------------------+
+(PSK,        +<------------------------------------------------------------------------------------+
+PSK-ECDHE)   |                              (ECDHE)                                                |
+/---------------------------\    /---------------------------\    /--------------------------\     |
+| type is binder_key        | NO | type is handshake_secret_ | NO | type is (early_secret or |     |
+| and ctx_type is init_id   |--->| and ctx_type is init_id   |--->| handshake_secret or app_ |     |
+|                           |    |                           |    | secret or certificate_   |     |
+|                           |    |                           |    | verify or register_      |     |
+|                           |    |                           |    | session_ticket or post_  |     |
+|                           |    |                           |    | handshake                |     |
+|                           |    |                           |    | and ctx_type is opaque   |     |  
+\---------------------------/    \---------------------------/    \--------------------------/     |
+             |                              |                            YES v                     |
+             |                              |                     /--------------------------\NO   |
+             |                              |                     | type is (certificate_    |     |
+             |                              |                     | verify or post_handshake)|---+ |
+             |                              |                     | and dhe and dhe_proposed |   | |
+             |                              |                     \--------------------------/   | |
+             |                              |                            YES v                   | |
+             |                              |                     /--------------------------\NO | |
+             |                              |                     | type is register_session_|   v |
+             |                              |                     | ticket and session_      |---+ |
+             |                              |                     \--------------------------/   | |
+        YES  v                         YES  v                            YES v                   | |
+/---------------------------\NO  /---------------------------\NO  /--------------------------\NO | |
+| psk and psk_proposed      |--+ | and dhe and dhe_proposed  |--+ | ctx_id in CTX_ID_DB      |---+ |
+| psk_key in PSK_DB         |  | \---------------------------/  v \--------------------------/   v |
+\---------------------------/  +------------|-------------------+------------|-------------------+ |
+             |                          YES |      +-------+    |        YES v                     |
+             +------------------------------+      | Error |<---+ /--------------------------\     |   
+         YES v                                     +-------+      | ks_ctx is pending        |---+ | 
++---------------------------+                                     \--------------------------/   | | 
+| Init key schedule context |                                            YES v                   | |
++---------------------------+                                     +----------------------------+ | |    
+             v                                                    |  ks_ctx.state=selected     | | |         
++---------------------------+                                     |(del related pending ks_ctx)| | |         
+| state=pending             |                                     +----------------------------+ | |         
+| set psk_proposed,         |                                                |                   | |
+| set dhe_proposed,         |                                                +<------------------+ |
+| 0rtt_proposed             |                                                |                     |
+| post_handshake_proposed   |                                                |                     |
++---------------------------+                                                |                     |
+             |                                                               |                     |
+             +<--------------------------------------------------------------+                     |
+             v                                                                                     |
+/---------------------------\                                                                      |
+| TLS13request.type in      |                                                                      |
+| ks_ctx.next_request       |                                                                      |
+\---------------------------/                                                                      |
+             v                                                                                     |
++---------------------------+                                                                      |
+| process TLS13Request      |                                                                      |
+| update CTX_ID_DB, key     |                                                                      |
+| schedule context, PSK_DB  |                                                                      |
++---------------------------+                                                                      |
+             v                                                                                     |
+/---------------------------\ NO                                                                   |
+| finished                  |----------------------------------------------------------------------+
 \---------------------------/
          YES v
 +---------------------------+
@@ -496,7 +511,7 @@ elif TLS13Request.type in [app_secret, certificate_verify, post_handshake, regis
 | client | EarlySecret            | opaque | client_early_traffic_secret*         |ClientHello                   | psk_proposed and  |
 |        |                        |        | early_exporter_master_secret*        |                              | client_0rtt       |
                                                                                    
-| client | HandshakeSecret        | init   | client_handshake_traffic_secret      |                              |                   |
+| client | HandshakeSecret        | init   | client_handshake_traffic_secret      |ClientHello ... ServerHello   |                   |
 |        |                        | opaque | server_handshake_traffic_secret      |ServerHello                   |                   | 
 |                                                                                                                
                                                                                    
