@@ -999,7 +999,7 @@ enables it to compute the application secrets.
 As no session resumption is provided, the Cryptographic Service and the
 LURK client goes into a finished state and delete their ks_ctx. 
 
-## TLS 1.3 Full Handshake with ECDHE authentication only and session resumtpion, no TLS client authentication 
+## TLS 1.3 Full Handshake with ECDHE authentication only and session resumtpion, no TLS client authentication  {#sec:ecdhe-resumption}
 
 This scenario considers that the TLS server is authenticated using ECDHE
 only in the first time and that further TLS handshake use the session
@@ -1010,16 +1010,17 @@ provided, the Full exchange is performed as described in section
 {{(sec:ecdhe-no-resumption}}.  
 
 The only change is that session resumption is activated, and thus LURK
-client and LURK servers do not go in a finished state and close teh LURK
+client and LURK servers do not go in a finished state and close the LURK
 session after the exchanges are completed. Instead further exchanges are
-expected. 
+expected. In the case where session resumption is enabled, the
+next_request of the ks_ctx is set to nes_session_request. 
 
 
 
 ### Full Handshake {#sec:ecdhe-session-resumption-fullhandshake}
 
 
-The Full TLS Handshake use ECDHE authentication. It is very similar rto
+The Full TLS Handshake use ECDHE authentication. It is very similar to
 the logic described in section {{(sec:ecdhe-no-resumption}}. The TLS
 handshake is specified below for convenience. 
 
@@ -1044,15 +1045,24 @@ TLS Client                                   TLS Server
 ### TLS server: NewSessionTicket {#sec:ecdhe-session-resumption-newsessionticket}
 
 As session resumption has been activated by the psk_key_exchange_mode,
-the TLS server does not go into a finished state. Instead, the LURK
-client continue the LURK session with a NewSessionTicketRequest to
-enable the Cryptographic Service to generate the
-resumption_master_secret necessary to generate the PSK and generate a
-NewTicketSession. ctx_id is of type opaque, ticket_nbr indicate sthe
-number of NewSessionTickets and handshake_context is set to earlier of
-client Certificate client CertificateVerify ... client Finished. As we
-do not consider TLS client authentication, the handshake_context is set
-to client Finished as represented below. 
+the TLS Server is expected to provid ethe TL Sclient NewSessionTickets
+as mentionned below:
+
+~~~
+TLS Client                                   TLS Server
+                          <--------      [NewSessionTicket]
+~~~
+
+
+The LURK client and  LURK server on the TLS server does not go into a
+finished state. Instead, the LURK client continue the LURK session with
+a NewSessionTicketRequest to enable the Cryptographic Service to
+generate the resumption_master_secret necessary to generate the PSK and
+generate a NewTicketSession. ctx_id is of type opaque, ticket_nbr
+indicate sthe number of NewSessionTickets and handshake_context is set
+to earlier of client Certificate client CertificateVerify ... client
+Finished. As we do not consider TLS client authentication, the
+handshake_context is set to client Finished as represented below. 
 
 ~~~
 TLS Server                      
@@ -1075,22 +1085,16 @@ Note that the LURK client on the TLS server may send multiple
 NewSessionTicketRequest. Future request have an emptpy
 handshake_context.
 
+Upon  receiving the NewSessionTicketRequest, the LURK server checks the
+ctx_id as well as if the request type matches the ks_ctx.next_request.
+It then generates the resumption_master_secret, NewSessionTickets.
+NewSessionTickets are stored into the PSK_DB under
+NewSessionTicket.ticket. Note that PSK is associated with the
+authentication mode as well as the Hash K server responds with
+NewSessionTickets that are then transitted back to the TLS client. The
+TLS server is ready for session resumption. 
 
-
-It is up to the LURK server implementation to define whether it is in a
-finished state or not. If the Cryptographic is in a finished state, it
-will not be able to provide NewSessionTickets. If the Cryptographic is
-not in a finished state, then the ks_ctx.next_request is set to
-NewSessionTicketRequest. The future NewSessionTicketRequest will have
-their handshake_context of zero length.  
-
-The TLS server is now able to provide NewSessionTicket and is ready to
-accept sesison resumption. 
-
-~~~
-TLS Client                                   TLS Server
-                          <--------      [NewSessionTicket]
-~~~
+### TLS client: NewSessionTicket {#sec:ecdhe-session-resumption-newsessionticket}
 
 Similarly, the LURK client on the TLS client will have to provide
 sufficient information to the Cryptographic Service the necessary PSK
@@ -1124,20 +1128,51 @@ as well as authentication modes. Each PSK is designated by an identity.
 The identity may be a label, but in our case the identity is derived
 from the NewSessionTicket.ticket.    
 
-### Session Resumption
+### Session Resumption {#sec:session-resumption}
 
 Session resumption is initiated by the TLS client. Session resumption is
 based on PSK authentication and different PSK may be proposed by the TLS
-client. 
+client. The TLS handshake is presented below.  
 
+~~~
+TLS Client                                   TLS Server
+       ClientHello
+       + key_share
+       + psk_key_exchange_mode
+       + pre_shared_key          -------->
+                                                       ServerHello
+                                                  + pre_shared_key
+                                                      + key_share
+                                             {EncryptedExtensions}
+                                                        {Finished}
+                                 <--------     [Application Data*]
+~~~
 
 The TLS client may propose to the TLS Server multiple PSK. Each of these
 PSK is associated a PskBindersEntry defined in {{!RFC8446}} section
 4.2.11.2. PskBindersEntry is computed similarly to the Finished message
-using the binder_key and the partial ClientHello. To compute binders,
-the TLS Client needs to request the binder_key associated to each
-porposed PSK. These binder_keys are retrieved to the Cryptographic
-Service using the BinderKeyRequest.
+using the binder_key and the partial ClientHello. 
+
+The TLS server is expected
+to pick a single PSK and validate the binder. In case the binder does
+not validate the TLS Handshake is aborted. As a result, only one
+binder_key is expected to be requested by the TLS server as opposed to
+the TLS client. 
+
+In this example we assume the psk_key_exchange_mode indicated the TLS
+client supports PSK-ECDHE as well as PSK authentication. The presence of
+a pre_shared_key and a key_share extension in the ServerHello inidcates
+that PSK-ECDHE has been selected.  
+
+
+#### TLS client: ClientHello 
+
+To compute binders, the TLS Client needs to request the binder_key
+associated to each proposed PSK. These binder_keys are retrieved to the
+Cryptographic Service using the BinderKeyRequest. A new ks_ctx is
+created thus the ctx_ix is of type init_id which contains the PSK
+identity (PSKIdentity.identity or NewSessionTicket.ticket.). key_request
+is set to binder_key and the handshake_context is empty.  
 
 ~~~
 TLS Client                      
@@ -1151,89 +1186,171 @@ Lurk Client                              Cryptographic Service
 ~~~
 
 Upon receiving the BinderKeyRequest, the Cryptographic Service checks
-the psk is in the PSK_DB and initiates a key schedule context (ks_ctx).
-The derivation of the binder_key is described in {{!RFC8446}} section
-7.1. It requires the PSK, and a Hash function. More specifically, no
-Handshake Context nor ECDHE secret is needed. PSK is identified by the
-PSKIdentity.identity or NewSessionTicket.ticket. The Hash function is
-associated to the PSK.  
-
+the psk is in the PSK_DB initiates a key schedule context (ks_ctx) and
+returns binder_key. 
 
 With the binder keys, the TLS Client is able to send it ClientHello
-message. 
+message. Note that the usage of multiple PSK may lead to the creation of
+multiple ks_ctx. The LURK client will be able to define which PSK has
+been selected by the TLS server, but that information is not provided to
+the LURK server. As a result, the LURK server is expected to set a
+timeout after which the ks_ctx is deleted. 
 
 
-~~~
-TLS Client                                   TLS Server
-       ClientHello
-       + key_share*
-       + pre_shared_key          -------->
-                                                       ServerHello
-                                                  + pre_shared_key
-                                                      + key_share*
-                                             {EncryptedExtensions}
-                                                        {Finished}
-                                 <--------     [Application Data*]
-~~~
+#### TLS server: ServerHello
 
-As described in {{!RFC8446}} section 4.2.11, the TLS server is expected
-to pick a single PSK and validate the binder. In case the binder does
-not validate the TLS Handshake is aborted. As a result, only one
-binder_key is expected to be requested by the TLS server as opposed to
-the TLS client. The binder_key is requested by the TLS server via 
-and EarlySecretRequest. In our case, only the binder_key is requested so
-key_request is set to binder_key only. Similarly, to the TLS client,
-the handshake_context is not need to generate the binder_key. However,
-the EarlySecret exchange requires the ClientHello to be provided.  
+The TLS server is expected to select a PSK, checks the associated binder
+and proceed further. If the binder fails, it is not expected to proceed
+to another PSK, as a result, the TLS server is expected to initiates a
+single LURK session. 
+
+The binder_key is requested by the TLS server via and
+EarlySecretRequest. In our case, only the binder_key is requested so
+key_request is set to binder_key only. Similarly, to the TLS client, the
+handshake_context is not needed to generate the binder_key. However, the
+EarlySecret exchange requires the ClientHello to be provided so early
+secrets may be computed in the same round during 0-RTT handshake. 
 
 ~~~
 TLS Server                      
 Lurk Client                              Cryptographic Service
-        BinderKeyRequest
-            ctx_id=init
+        EarlySecretRequest
+            ctx_id=init_id
             key_request=binder_key
             handshake_context=ClientHello
-                                         BinderKeyResponse
+                                         EarlySecretResponse
                                    <---------   key
 ~~~
 
-The TLS server validates the binder before proceeding to the
-ServerHello. To complete to the ServerHello exchange, the TLS server
-needs be able to encrypt the messages with the
-server_handshake_traffic_secrets as well as the application data with
-the server_application_traffic_secret_0. In addition, The TLS server
-will also require the corresponding client_handshake_traffic_secrets and
-client_application_traffic_secret_0 to decrypt the client Finished and
-associated application data. The procedure is similar as the one
-described in the Full
-handshake in section {{sec:ecdhe-session-resumption-fullhandshake}}. 
-The main differences
-are that  CertificateVerify is not requested and that the Handshake
-Context has already been initialized with the ClientHello. As a result,
-only the complement to the ClientHello is provided. When PSK+ECDHE is
-used, the EphemeralSecret is provided. When PSK-only is used, the
-EphemeralSecret is empty. The Cryptographic Service checks the
-authentication is compatible with the psk_key_exchange_modes. An empty
-EphemeralSecret will be replaced by a default value of a string of
-Hash.length bytes set to zeros is used. 
+To complete to the ServerHello exchange, the TLS server
+needs the handshake and application secrets. These secrets are requested
+via an HandshakeAndAppSecret. ctx_id is of type opaque and the
+handshake_context is set to ServerHello ... later of server
+EncryptedExtensions / CertificateRequest. In our case, this the
+handshake_context is set to ServerHello ... EncryptedExtensions. 
+
+The necessary Handshake Context to generate the handshake secrets is
+ClientHello ... ServerHello, so the Cryptographic Service can generate
+the handshake secrets. The necessary handshake context to generate the
+application secrets is ClientHello ... server Finished. So the
+Cryptographic Service needs to generate the Finished message before as
+in the case of the InitCerificateVerify exchange  detailled in
+{{sec:ecdhe-session-resumption-fullhandshake}}.  
 
 
 ~~~
 TLS Server                      
 Lurk Client                              Cryptographic Service
         HandshakeAndAppRequest
-            ctx_id=init_id
+            ctx_id=ctx_id
             key_request
             handshake_context
             ephemeral_secret          -------->
-                                         InitCertificateVerifyResponse
-                                            keys, certificate_verify
+                                         HandshakeAndAppResponse
+                                            keys, finished
                                    <---------   finished
 ~~~
 
-Upon receiving the ServerHello exchange, the TLS client proceeds as
-described in section {{sec:ecdhe-session-resumption-fullhandshake}}. 
+The Cryptographic Service returns the necessary secret to the TLS server
+to complete the ServerHello response. 
 
+The remaining of the TLS handshake is proceeded similarly as described
+in the Full Handshake in section {{sec:ecdhe-resumption}}.  
+
+
+
+## 0-RTT handsahke
+
+The 0-RTT Handshake is a PSK or PSK-ECDHE authentication that enables
+the TLS client to provide application data during the first round trip.
+The main differences to the PSK PSK-ECDHE authentication described in
+the case of session resumption is that:
+
+* Application Data is encrypted in the ClientHello based on the
+client_early_secret
+* Generation of the client_early_secret requires the Cryptographic
+Service to be provisioned with the ClientHello which does not need to be
+re-provisioned later to generate the handshake secrets 
+* An additional message EndOfEarlyData needs to be considered to compute
+the client Finished message.   
+
+~~~
+TLS Client                                   TLS Server
+
+       ClientHello
+       + early_data
+       + key_share*
+       + psk_key_exchange_modes
+       + pre_shared_key
+       (Application Data*)     -------->
+                                                       ServerHello
+                                                  + pre_shared_key
+                                                      + key_share*
+                                             {EncryptedExtensions}
+                                                     + early_data
+                                                        {Finished}
+                               <--------       [Application Data*]
+       (EndOfEarlyData)
+       {Finished}              -------->
+       [Application Data]      <------->        [Application Data]
+~~~
+
+### TLS client: ClientHello
+
+With 0-RTT handshake, the TLS client builds binders as in session
+resumption described in section {{sec:session-resumption}}. The
+binder_key is retrieved for each proposed PSK with a BinderKeyRequest.
+When early application data is sent it is encrypted using the
+client_early_traffic_secret. This secret is retrieved using the
+EarlySecretRequest. The ctx_id type is set to opaque as the ks_ctx has
+already been established by the BinderKeyRequest. The key_request is set
+to client_early_traffic_secret and the handshake_context is set to
+ClientHello. 
+
+When multiple PSK are proposed by the TLS client, the first proposed PSK
+is used to encrypt the application data.
+
+~~~
+TLS Client                      
+Lurk Client                              Cryptographic Service
+        EarlySecretRequest
+            ctx_id=opaque
+            key_request=client_early_traffic_secret
+            handshake_context=ClientHello
+                                         EarlySecretResponse
+                                   <---------   keys=client_early_traffic_secret
+~~~
+
+Upon receiving the EarlySecretRequest, the Cryptographic Service
+generate the client_early_traffic_secret. The Cryptographic checks the
+ctx_id and the request type against the ks_ctx.next_request before
+generating the early secret. 
+
+The TLS client is able to send its ClientHello with associated binders
+and application data.  
+
+### TLS server: ServerHello
+
+If the TLS server accepts the early data. It proceeds as described in session
+resumption described in section {{sec:session-resumption}}. In addition
+to the binder_key, the TLS server also request the client_early_traffic_secret
+to decrypt the early data as well as to proceed to teh ServerHello
+exchange.
+
+
+### TLS client: Finished
+
+The TLS client proceeds as described in handshake based on ECDHE, PSK or
+PSK-ECDHE authentications described in
+{{sec:ecdhe-no-session-resumption}} and
+{{sec:ecdhe-session-resumption}}. The main difference is that upon
+requesting handshake and application secrets, using an HandshakeRequest
+the TLS client will not provide the ClientHello as part as the
+handshake_context. The Client as already been provided during the
+EarlySercret exchange. 
+
+
+## TLS client authentication
 
 
 ## TLS Client Authentication (CertificateRequest) 
@@ -1242,434 +1359,4 @@ described in section {{sec:ecdhe-session-resumption-fullhandshake}}.
 
 ## TLS Client Authentication (PostHandshake)
 
-
-## 0-RTT 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-TLS Client                                   TLS Server
-
-                                             ServerHello  ^ Key
-                                             + key_share  | Exch
-                                   {EncryptedExtensions}  ^  Server
-                                   {CertificateRequest*}  v  Params
-                                           {Certificate}  ^
-                                     {CertificateVerify}  | Auth
-                                              {Finished}  v
-                          <--------  [Application Data*]
-~~~
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Upon receiving the ServerHello, two scenarios may happen:
-* The TLS Client does not need to authenticate itself
-* The TLS Client needs to authenticate itself in which case
-CertificateRequest is present
-
-### No TLS Client  Authentication
-
-Upon receiving the ServerHello, the TLS Client may generate the
-necessary keys to decrypt the encrypted ServerHello extensions. Note
-that as no PSK is involved, and the Cryptographic is not involved to
-ensure the PSK is secret. The TLS Client does not need to involve the
-K client on the rvice. 
-
-Alternatively, it may also delegate the computation of the keys to the
-Cryptographic Service and perform an LURK Keys exchange. To complete the
-handshake, the TLS Client requests server_handshake_traffic_secret,
-client_handshake_traffic_secret, server_application_traffic_secret_0,
-client_application_traffic_secret_0.
-
-If the TLS Client is not willing to use session resumption, it may
-indicate the Cryptographic Service, by setting session_resumption to
-false. By doing so, the Cryptographic Service will not keep the context
-associated to the key schedule. On the other hand, if the  TLS Client
-intends to perform session resumption, it MUST set the
-session_resumption to true in order to indicate the Cryptographic
-Service that further exchange are expected.  
-
-~~~
-TLS Client                      
-Lurk Client                              Cryptographic Service
-        KeysRequest
-            freshness_funct="sha256", h="sha256",
-            ke_mode="dhe_ke", key_request=\xf1 
-            handshake_context=(ClientHello...server Finished)
-            secrets=(ecdhe), session_resumption="true"
-            ------->
-
-                                  KeysResponse
-                           <--------  keys, context_id
-~~~
-
-The TLS Client is able to decrypt the encrypted extensions, verifies the
-CertificateVerify signature, the Finished message with the
-[server]_handshake_traffic_secret.
-
-The TLS Client computed the Finished message and encrypt it with the
-client_handshake_traffic_secret. Similarly, the TLS Client is also able
-to decrypt (resp. encrypt) the Application Data with
-server_application_traffic_secret_0] (resp.
-client_application_traffic_secret_0]). In case the TLS Client needs to
-export the master, it also has the exporter_master_secret   
-
-
-Note that in case of session resumption, the resumption_master_secret is
-not provided. One reason is that ClientHello...client Finished needs to
-be provided. The other reason is that PSK are not shared outside the
-Cryptographic Service. In this case the usage of the Cryptographic
-Service is limited as the PSK could have been generated outside the
-Cryptographic Service. As a result, the protection provided by the
-Cryptographic Service is limited to protect the resumption_master_secret
-after the key exchange. 
-
-### TLS Client  Authentication
-
-When the TLS Server requests the TLS Client to authenticate 
-with a CertificateRequest, the TLS Client needs to generate a
-CertificateVerify. 
-
-Similarly to the TLS Server, the CertificateVerify is requested via a Lurk
-AuthRequest. The LURK Client indicates the CertificateVerify is intended
-for a TLS Client by setting handshake_mode to "client" as well as by
-providing an appropriated Handshake Context that is
-ClientHello ... later of server Finished/EndOfEarlyData as well
-as the Certificate. 
-
-The Cryptographic returns the certificate_verify as well as the keys. 
-
-~~~
-TLS Client
-Lurk Client                              Cryptographic Service
-        AuthRequest
-            freshness_funct="sha256", h="sha256";
-            ke_mode="dhe_ke", key_id,
-            sig_algo="ed25519", handshake_mode="client",
-            handshake_context=(ClientHello ... later of server 
-                               Finished/EndOfEarlyData ),
-            certificate=Certificate
-            secret=(echde), key_request=\xf1,
-            session_resumption=true -------->
-                                         AuthResponse
-                                            keys, certificate_verify
-                                   <---------   finished, context_id
-~~~
-
-Similarly to {{clt-no-auth}} the TLS Client is able to complete the
-TLS Handshake. 
-
-~~~
-TLS Client                                   TLS Server
-
-           ^ {Certificate*}
-      Auth | {CertificateVerify*}
-           v {Finished}              -------->
-             [Application Data]      <------->  [Application Data]
-~~~
-
-
-
-### Session Resumption 
-
-When no PSK is involved, there is always the possibility the PSK be
-maintained outside the Cryptographic Service. We assume that when the
-Cryptographic Service is involved the key schedule is only performed by
-the Cryptographic Service. The Cryptographic Service will maintain a
-secure storage of the security credentials to attackers that are not
-observing the initial handshake. 
-
-If the TLS Server has not set the session_resumption it will not be able
-to generate NewSessionTicket and session resumption will not be
-possible. If the TLS Client has not set the session_resumption, it will
-not be able to generate the PSK and session resumption will not be
-possible either. As a result, session_resumption is only possible when
-both TLS Client and TLS Server have set session_resumption in their
-previous exchange. 
-
-
-#### NewSessionTicket to teh (TLS Server)
-
-Providing session resumption is controlled by the TLS Server as it
-provides the TLS Client NewSessionTicket. 
-
-The cryptographic Service is responsible for emitting the session
-tickets. This will ease the centralization of SessionTicket. 
-
-When a TLS Server is willing to provide session resumption, the TLS
-Server is expected to request a NewSessionTicket after the TLS Handshake
-is completed - at least during the validity of the context_id.
-
-The TLS Server provides the context_id, the remaining informations to
-generate the resumption_master_secret. In this case, the necessary
-parameters are the client Finished exchange. In addition, the TLS Server
-may specify the number of tickets it is expecting.  
-
-The Cryptographique service knows from the context the request comes
-from a TLS Server, completes the key schedule and return a
-NewSessionTicket structures. Note that the NewSessionTicket is mostly a
-reference (or hint) for the Cryptographic Service to retrieve the PSK
-and does not contain information about the PSK. 
-
-~~~
-TLS Server
-Lurk Client                              Cryptographic Service
-        TicketRequest
-        context_id, handshake_context=
-            (Certificate*,CertificateVerify*,
-            Finished), ticket_nbr  -------->
-                                         TicketResponse
-                                   <---------  new_session_ticket_list
-~~~
-
-With the NewSessionTicket, the TLS Server is able to provide the TLS
-Client on eor multiple NewSessionTickets.
-
-~~~
-TLS Client                                   TLS Server
-                          <--------      [NewSessionTicket]
-~~~
-
-#### TLS Client 
-
-When the TLS Client decides to perform a session resumption, the TLS
-Client indicates in the pre_shared_key extension the PSK used for the
-authentication via the ticket mechanism. The pre_share_key extension
-associates to each key identity - the ticket field of the
-NewSessionTicket structure a binder. Binders are generated imilarly to
-the Finished message. Inputs are the KDF
-Hash function of the initial handshake, the partial
-ClientHello of the current handshake, that is the ClientHello up to and
-including the PreSharedKeyExtension.identities field, and the
-binder_key. Except the for the binder_key all informations are known to
-the TLS Client. 
-
-The binder_key is generated from the PSK, that is the nonce associated
-to the identity and the resumption_master_secret. The binder_key is then
-requested via the BinderKeyReq exchange. Upon receiving the binder_key,
-the TLS Client is able to complete the ClientHello.  
-
-The Cryptographic Service also provides a context_id to reference the
-KeyScheduler in future exchanges. 
-
-~~~
-TLS Client                      
-Lurk Client                              Cryptographic Service
-        BinderKeysRequest
-            context_id
-            handshake=patial ClientHello
-            -------->                 BinderKeyResponse
-                               <--------- binder_key, context_id
-~~~
-
-COMMENT: context_id is similar to NewSessionTicket for the TLS Client.
-We need to think of resilient clients.... need some thoughts.
-
-The PSK may be used alone or in combination of the ECHDE, in
-which case PFS is provided. The mode has been agreed during the initial
-handshake.
-
-
-COMMENT: session_resumption may be replaced by key_share_mode
-
-
-~~~
-TLS Client                                   TLS Server
-          ClientHello
-          + key_share*
-          + pre_shared_key          -------->
-~~~
-
-Upon receiving the ClientHello, the TLS Server, performs a
-BinderKeyRequest in order to check the pre_share_keys provided by the
-TLS Client. 
-
-
-
-
-
-~~~
-TLS Server                     
-Lurk Client                              Cryptographic Service
-        BinderKeysRequest
-            context_id
-            handshake=patial ClientHello
-            -------->                 BinderKeyResponse
-                               <--------- binder_key, context_id
-~~~
-
-The TLS Server is able to build its ServerHello. PSK authentication is
-used so no CertificateVErify is needed. The TLS server will request the
-various secrets necessary to encrypt/decrypt the TLS Hanshake as well as
-Application Data. 
-
-~~~
-TLS Server                      
-Lurk Client                              Cryptographic Service
-        KeysRequest
-            freshness_funct="sha256", h="sha256",
-            ke_mode="dhe_ke", key_request=\xf1 
-            handshake_context=(ClientHello...server Finished)
-            secrets=(ecdhe), session_resumption="true"
-            ------->
-
-                                  KeysResponse
-                           <--------  keys, context_id
-~~~
-
-The exchange above we do not have the server Finished and we need it for
-the traffic_secret. The exchange below is probably preferred, without
-mentioning certificateverify i.e empty certificate. 
-
-~~~
-TLS Client
-Lurk Client                              Cryptographic Service
-        AuthRequest
-            freshness_funct="sha256", h="sha256";
-            ke_mode="psk_dhe_ke", key_id,
-            sig_algo="ed25519", handshake_mode="client",
-            handshake_context=(ClientHello ... later of server 
-                               Finished/EndOfEarlyData ),
-            certificate=""
-            secret=(echde), key_request=\xf1,
-            session_resumption=true -------->
-                                         AuthResponse
-                                            keys, certificate_verify
-                                   <---------   finished, context_id
-
-~~~
-
-The TLS Server is able to finalize the handshake as described in section
-{{}} 
-
-
-~~~
-TLS Client                                   TLS Server
-                                                          ServerHello
-                                                     + pre_shared_key
-                                                         + key_share*
-                                                {EncryptedExtensions}
-                                                           {Finished}
-                                    <--------     [Application Data*]
-          {Finished}                -------->
-          [Application Data]        <------->      [Application Data]
-~~~
-
-Upon receiving the TLS Server ServerHello, the TLS Client proceeds as
-describe in {{}}
-
-After the handshake finises, if further session resumption is foreseen,
-the TLS Client and TLS Server provide the handshake so the crytpographic
-service generates the resumption master_secret.   
-
-
-PSK associated to ticket:
-nonce, context-id, -->PSK
-
-
-
-
-If the TLS Client has set session_resumption to false, it will not
-attempt to perform session resumption and will not use the potential
-NewSessionTickets provided by the TLS Server. On the other hand, if the
-TLS Server 
-
-The remiaing of this section assumes the TLS Server and the TLS Client have set session_resumption
-to true. 
-
-COMMENT: We need to understand how ticket and PSK are registered. 
-The server has already sent a ticket for session resumption, however,
-the resumption_master_secret has not been provided. 
-
-
-When the TLS Client or the TLS Server wants t
-
-
-In the case the TLS Server does not
-request authentication from the TLS Client, no additional exchange will
-be needed. In the case, the TLS Server requests the TLS Client to
-authenticate itself with a CertificateRequest extension, the TLS Client
-will have to perform an additional AuthRequest.  
-    
-
-### Post Handshake Authentication
-
-Handshake_context is set to "post_handshake"
-
-
-~~~
-
-                             ^ {Certificate*}
-                        Auth | {CertificateVerify*}
-                             v {Finished}              -------->
-                               [Application Data]      <------->  [Application Data]
-~~~
-      
-
-## TLS 1.3 Full Handshake with PSK-only
-
-## TLS 1.3 Full Handshake with PSK with ECDHE
-
-
-## TLS 1.3 Full Handshake with PSK
-
-    TLS Client                                                             TLS Server
-
-Lurk Server    Lurk CLient                                                           Lurk Client Lurk Server 
-
-
-                        Key  ^ ClientHello
-                        Exch | + key_share*
-                             | + signature_algorithms*
-                             | + psk_key_exchange_modes*
-                             v + pre_shared_key*       -------->
-                                                                          ServerHello  ^ Key
-                                                                         + key_share*  | Exch
-                                                                    + pre_shared_key*  v
-                                                                {EncryptedExtensions}  ^  Server
-                                                                {CertificateRequest*}  v  Params
-                                                                       {Certificate*}  ^
-                                                                 {CertificateVerify*}  | Auth
-                                                                           {Finished}  v
-                                                       <--------  [Application Data*]
-                             ^ {Certificate*}
-                        Auth | {CertificateVerify*}
-                             v {Finished}              -------->
-                               [Application Data]      <------->  [Application Data]
 

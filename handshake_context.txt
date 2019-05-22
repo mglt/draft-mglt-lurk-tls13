@@ -245,8 +245,9 @@ elif TLS13Request.type is new_session_tickets:
 PSK-ECDHE)   |                              ECDHE                                                  |
 /---------------------------\    /---------------------------\    /--------------------------\     |
 | type is early_secret and  | NO | type is init_cert_verify_ | NO | type is (handshake or    |     |
-| and ctx_type is init_id   |--->| and ctx_type is  init_id  |--->| handshake_and_app_secret)|     |
-| and psk_proposed and psk  |    | and dhe and dhe_proposed  |    | and ctx_type is opaque   |     |
+| and ctx_type is init_id   |--->| and ctx_type is  init_id  |--->| handshake_and_app_secret |     |
+| and psk_proposed and psk  |    | and dhe and dhe_proposed  |    | or new_session_ticket)   |     |
+|                           |    |                           |    | and ctx_type is opaque   |     |
 \---------------------------/    \---------------------------/    \--------------------------/     |
         YES  v                         YES  v                            YES v                     |       
 /---------------------------\NO  /---------------------------\NO  /--------------------------\NO   |
@@ -327,16 +328,15 @@ LURK client on the TLS client
               TLS Client Policy for authentication
               PSK, PSK-ECDHE                    ECDHE
                        |                           |
-              psk      |                           |
-               v       v                           |
-            +--------------------+                 |
+                       |                           |
+                       v                           |
+  psk  ---> +--------------------+                 |
             | BinderKey          |                 |
             +--------------------+                 |
-                       v                           |
+EARLY_EXPORTER, 0-RTT  |                           |
+                v      |                           |
             /------------------------\ NO          |
-            | 0rtt_proposed and 0rtt |--->+        |  /// politique du TLS client
-            | or early_exporter      |    |        |
-            \------------------------/    |        |
+            \------------------------/----+        |
                    YES v                  |        |
             +--------------------+        |        |
             |    EarlySecret     |        |        |
