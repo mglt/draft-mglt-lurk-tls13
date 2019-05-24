@@ -26,8 +26,9 @@ struct {
             SecretRequest;
         case handshake_and_app_secrets, handshake_secret: 
             HandshakeSecretRequest
-        case init_certificate_verify, cerificate_verify, post_handshake: 
-            CertificateVerifyRequest; 
+        case init_certificate_verify, cerificate_verify: 
+            CertificateVerifyRequest;
+        case post_handshake: PostHandshakeRequest
         case new_session_ticket:  NewSessionTicketRequest;
         case register_session_ticket: RegisterSessionTicketRequest;
     };
@@ -154,31 +155,24 @@ LURK Client on the TLS server
 The key scheduler context (ks_ctx) handles the communication between the LURK client and the LURK server during a given TLS Handshake. It contains the necessary parameter to handle the communication. This includes among other the necessary variable to provide PFS as well as making the ctx_id unpredictable. 
 
                  TLS Server Policy for authentication
-received      PSK, PSK-ECDHE,                    ECDHE
-ClientHello            |                           |
-      ---->            v                           v
-            /----------------------\ NO  /----------------------\ NO  
-            | psk_proposed and psk |---+ | dhe_proposed and dhe |----+  
-            \----------------------/   | \----------------------/    |  
-                   YES v               |        YES |                |
-            +----------------------+   | +----------------------+    |
-            | Init ks_ctx          |   | | Init ks_ctx          |    |
-            +----------------------+   | +----------------------+    |
-                       v               |            |                v
-            +---------------------+    |            |        +-------+    
-            | EarlySecret         |    |            |        | ERROR |
-            +---------------------+    +-------------------->|       | 
-                       |                            |        +-------+
-            /----------------------\ NO             |        +---------------+            
-            | Selected PSK         |------------------------>| Delete ks_ctx |
-            \----------------------/                |        +---------------+
-to be formed       YES v                            v             
-ServerHello +-----------------------+    +-----------------------+  
-      ----> | HandshakeAndAppSecret |    | InitCertificateVerify |          
-            +-----------------------+    +-----------------------+ 
-                      |                             |
-                      +-----------------------------+
-ServerHello           v
+received      PSK, PSK-ECDHE,                   ECDHE
+ClientHello            |                          |
+      ---->            v                          v
+  psk  ---->+----------------------+    +----------------------+
+            | Init ks_ctx          |    | Init ks_ctx          |
+            +----------------------+    +----------------------+
+                       v                           |            
+            +---------------------+                |   
+            | EarlySecret         |                |
+            +---------------------+                |
+                       |                           |
+to be formed       YES v                           v             
+ServerHello +-----------------------+   +-----------------------+  
+      ----> | HandshakeAndAppSecret |   | InitCertificateVerify |          
+            +-----------------------+   +-----------------------+ 
+                       |                           |
+                       +---------------------------+
+ServerHello            v
       <---- /--------------------\ NO                            
             | session_resumption |------+
             \--------------------/      |
@@ -358,6 +352,18 @@ ServerHello        YES v
                     |                     |
 client Finished     +------+--------------+
 <----                      |
+                           v                                       
+                /--------------------\ NO                       
+                |   post_handshake   |--------+
+                \--------------------/        |
+                       YES v                  |
+           +-----------------------------+    |
+           | RegisterNewSessionTickets   |    |
+           | (empty NewSessionTickets)   |    |
+           +-----------------------------+    |
+                           |                  |
+                           +<-----------------+
+                           |
                            +<------------------------------------------------------------------------+
                            |                                                                         |
                            +---------------------------------------------------+                     |
@@ -485,7 +491,7 @@ PSK-ECDHE)   |                              (ECDHE)                             
 
 | Role   | Type                   |ctx_type|  key_request                         | handshake_context            | Condition         |
 
-| server | EarlySecret            | init   | binder_key*                          |ClientHello                   | psk_proposed and  | 
+| server | EarlySecret            | init   | binder_key                           |ClientHello                   | psk_proposed and  | 
 |        |                        |        | client_early_traffic_secret*         |                              | !server_only_dhe  |
 |        |                        |        | early_exporter_master_secret*        |                              | and server_0rtt   |
                                                                                                                                      
@@ -524,7 +530,7 @@ PSK-ECDHE)   |                              (ECDHE)                             
 |        |                        |        | exporter_master_secret*              |EndOfEarlyData                |                   |
                                                                                    
 | client | RegisterSessionTickets | opaque |                                      |earlier of client Certificate | client_resumption |
-|        |                        |        |                                      |client CertificateVErify ...  | or post-handshake |
+|        |                        |        |                                      |client CertificateVerify ...  | or post-handshake |
 |        |                        |        |                                      |client Finished               |                   | 
 
 | client | PostHandshake          | opaque |                                      |CertificateRequest            | post-handshake    |
@@ -616,20 +622,20 @@ EphemeralSecret{
 struct {
     SecretsRequest secret_request;
     EphemeralSecret ephemeral_secret; 
-} HandshakeSecretRequest
+} HandshakeSecretRequest;
 
 struct {
     HandshakeSecretsRequest handshake_request;
     KeyPairId key_id;
     SignatureScheme sig_algo; //RFC8446 section 4.2.3.
-    LURKCertificate certificate   //RFC8446 section 4.4.2.
+    LURKCertificate certificate;   //RFC8446 section 4.4.2.
 } CertificateVerifyRequest;
 
 
 struct {                     
     SecretsResponse secret_response;
     opaque signature<0..2^16-1>; //RFC8446 section 4.4.3.
-    Finished finished            // RFC8446 section 4.4.4.
+    Finished finished;            // RFC8446 section 4.4.4.
 } CertificateVerifyResponse;
 
 
@@ -644,15 +650,18 @@ struct {
 } NewSessionTicketResponse; 
 
 struct {
-    ContextID ctx_id
-    Handshake handshake_context<0..2^32>     //RFC8446 section 4.
+    ContextID ctx_id;
+    Handshake handshake_context<0..2^32>;     //RFC8446 section 4.
     NewSessionTicket ticket_list<0..2^16-1>; //RFC8446 section 4.6.1.
-} RegisterSessionTicket;
+} RegisterSessionTicketRequest;
 
+struct {} RegisterSessionTicketResponse;
 
-
-
-
+struct {
+    ContextID ctx_id;
+    Handshake handshake_context<0..2^32>;     //RFC8446 section 4.
+    int16 app_n;    
+} PostHandshakeRequest;
 
 --------------------------------------
 
