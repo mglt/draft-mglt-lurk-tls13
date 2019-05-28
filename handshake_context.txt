@@ -58,49 +58,25 @@ Configuration:
 role:
 defines if LURK exchanges happen on a TLS client or a TLS server. 
 
-psk:
-is set when the TLS server or the TLS client accepts  psk
-authenticationg. psk authentication includes psk only or psk in
-combination with echde. The psk can be configured or generated for
-session resumption. When the LURK Server is provisioned with PSK psk is
-set. When the LURK Server is not provisioned with PSK, psk has the same
-value as session_resumption.
-
 session_resumption:
 is set when the TLS server provides session resumption or when the TLS
-client wants to perform session resumption. When session_resumption is
-set, psk MUST be set.
-
-
-COMMENT replace dhe by sig
-dhe:
-is set when DHE authentication is accepted. By default dhe is set. 
-
-0rtt:
-is set when the TLS server accepts 0RTT handshake or when the TLS client
-wants to perform 0RTT handshake. By default 0rtt is set. 
+client wants to perform session resumption. 
 
 early_exporter:
-is set when the application uses exporters in 0RTT. This
+is set when the application uses exporters in 0-RTT. This
 application specific. When set 0rtt MUST be set and
 early_exporter_master_secret is provided to the application. By default,
-early_exp i sunset. 
+early_exp is unset. 
+
+application:
+is set when the application carries the application data over the TLS
+session. TLS is not only used as an handshake protocol. By default
+application is set.  
 
 exporter:
 is set when the application is uses exporter. This is application
 specific. When set, exporter_master_secret is returned to the
 application. By default, exporter is unset.
-
-application:
-is set when application data is encrypted using
-client_application_traffic_secret_0 and
-server_application_traffic_secret_0. By default, application is set.
-
-post_handshake:
-is set when the TLS client accepts to be authenticated after the TLS
-handshake. It is set on the TLS server side when the TLS server
-authenticates the TLS client after the handshake when supported by the
-TLS client. 
 
 Sates:
 
@@ -125,11 +101,11 @@ necessary keys.
 
 EarlySecret.key_request(ClientHello):
     key_request set to zero (no key)
-    if !(psk_proposed and psk):
+    if !psk_proposed:
         EarlySecret MUST NOT be sent
     set binder_key
-    if 0rtt and 0rtt_proposed:
-        set request client_early_traffic_secret set
+    if 0rtt_proposed:
+        set request client_early_traffic_secret
     if early_exporter:
         set request early_exporter_master_secret
 
@@ -138,8 +114,8 @@ EarlySecret.key_request(ClientHello):
 {CertificateVerify, HandshakeAndAppSecret,
 InitCertificateVerify}.key_request(ClientHello):    
     key_request set to zero (no key)
-    if !((psk_proposed and psk) or (dhe_proposed and dhe)):
-        TLS Handshake is aborted
+    if !psk_proposed and !dhe_proposed:
+        NA // TLS Handshake is aborted
     set client_handshake_traffic_secrets
     set server_handshake_traffic_secrets
     if application:
@@ -171,8 +147,9 @@ ServerHello +-----------------------+   +-----------------------+
       ----> | HandshakeAndAppSecret |   | InitCertificateVerify |          
             +-----------------------+   +-----------------------+ 
                        |                           |
-                       +---------------------------+
-ServerHello            v
+   SESSION RESUMPTION  +---------------------------+
+               |       |
+ServerHello    v       v
       <---- /--------------------\ NO                            
             | session_resumption |------+
             \--------------------/      |
@@ -240,17 +217,16 @@ PSK-ECDHE)   |                              ECDHE                               
 /---------------------------\    /---------------------------\    /--------------------------\     |
 | type is early_secret and  | NO | type is init_cert_verify_ | NO | type is (handshake or    |     |
 | and ctx_type is init_id   |--->| and ctx_type is  init_id  |--->| handshake_and_app_secret |     |
-| and psk_proposed and psk  |    | and dhe and dhe_proposed  |    | or new_session_ticket)   |     |
+| and psk_proposed          |    |                           |    | or new_session_ticket)   |     |
 |                           |    |                           |    | and ctx_type is opaque   |     |
 \---------------------------/    \---------------------------/    \--------------------------/     |
-        YES  v                         YES  v                            YES v                     |       
-/---------------------------\NO  /---------------------------\NO  /--------------------------\NO   |
-| psk and psk_proposed      |--+ | and dhe and dhe_proposed  |--+ | ctx_id in CTX_ID_DB      |---+ |
-| psk_key in PSK_DB         |  | \---------------------------/  v \--------------------------/   v |
-\---------------------------/  +------------|-------------------+------------|-------------------+ |
-             |                          YES |      +-------+    |        YES v                     |
-             +------------------------------+      | Error |<---+ /--------------------------\     |   
-         YES v                                     +-------+      | ks_ctx is pending        |---+ | 
+        YES  v                         YES  |                            YES v                     |       
+/---------------------------\NO +-----+     |                     /--------------------------\NO   |
+| psk in PSK_DB             |-->|Error|     |                     | ctx_id in CTX_ID_DB      |---+ |
+\---------------------------/   +-----+     |                     \--------------------------/   v |
+             |                              |                            YES v                     |
+             +<-----------------------------+                     /--------------------------\     |   
+         YES v                                                    | ks_ctx is pending        |---+ | 
 +---------------------------+                                     \--------------------------/   | | 
 | Init key schedule context |                                            YES v                   | |
 +---------------------------+                                     +----------------------------+ | |    
@@ -266,7 +242,7 @@ PSK-ECDHE)   |                              ECDHE                               
              +<--------------------------------------------------------------+                     |
              v                                                                                     |
 /---------------------------\ NO +-------+                                                         |
-| TLS13request.type in      |----| ERROR |                                                         |
+| TLS13request.type in      |--->| ERROR |                                                         |
 | ks_ctx.next_request       |    +-------+                                                         |
 \---------------------------/                                                                      |
          YES v                                                                                     |
@@ -275,7 +251,7 @@ PSK-ECDHE)   |                              ECDHE                               
 +---------------------------+                                                                      |
              v                                                                                     |
 /---------------------------\ NO +------------------+                                              |
-| finished                  |----| update CTX_ID_DB |----------------------------------------------+ 
+| finished                  |--->| update CTX_ID_DB |----------------------------------------------+ 
 \---------------------------/    | update ks_ctx    |                                                               
          YES v                   +------------------+                                                               
 +---------------------------+                                       
@@ -287,25 +263,25 @@ PSK-ECDHE)   |                              ECDHE                               
 
 BinderKey.key_request:
     key_request set to zero (no key)
-    if psk_proposed and psk:
+    if psk_proposed:
        set binder_key
     else:
         BinderKey MUST NOT be sent
 
 EarlySecret.key_request(ClientHello):
     key_request set to zero (no key)
-    if !(psk_proposed and psk):
+    if !psk_proposed:
         EarlySecret MUST NOT be sent
     set client_handshake_traffic_secrets
     set server_handshake_traffic_secrets
-    if 0rtt and 0rtt_proposed:
+    if 0rtt_proposed:
         set request client_early_traffic_secret set
     if early_exporter:
         set request early_exporter_master_secret
 
 {CertificateVerify, AppSecret}.key_request(ClientHello):    
     key_request set to zero (no key)
-    if !((psk_proposed and psk) or (dhe_proposed and dhe)):
+    if !(psk_proposed or dhe_proposed):
         TLS Handshake is aborted
     if application:
         set client_application_traffic_secret_0
@@ -353,9 +329,9 @@ ServerHello        YES v
 client Finished     +------+--------------+
 <----                      |
                            v                                       
-                /--------------------\ NO                       
-                |   post_handshake   |--------+
-                \--------------------/        |
+             /-------------------------\ NO                       
+             | post_handshake_proposed |------+
+             \-------------------------/      |
                        YES v                  |
            +-----------------------------+    |
            | RegisterNewSessionTickets   |    |
@@ -369,14 +345,13 @@ client Finished     +------+--------------+
                            +---------------------------------------------------+                     |
 client Finished            v                                                   v                     |
 NewSessionTickets /--------------------\ NO     CertificateRequest  /-------------------------\ NO   |
-            ----> | session_resumption |----------+           ----> | post_handshake and      |----+ |
-                  \--------------------/          |                 | post_handshake_proposed |    | |
-                            YES v                 |                 \-------------------------/    | |
-                  +-----------------------------+ |                        YES v                   | | 
-                  | RegisterNewSessionTickets   | |                 +-------------------------+    | |
-                  +-----------------------------+ |                 |      PostHandshake      |    | | 
-                                |                 |                 +-------------------------+    | |
-                                v                 v                             v                  v |
+            ----> | session_resumption |----------+           ----> | post_handshake_proposed |----+ |
+                  \--------------------/          |                 \-------------------------/    | | 
+                            YES v                 |                        YES v                   | | 
+                  +-----------------------------+ |                 +-------------------------+    | |  
+                  | RegisterNewSessionTickets   | |                 |      PostHandshake      |    | | 
+                  +-----------------------------+ |                 +-------------------------+    | |  
+                                v                 v                             v                  | |
                                 +-----------------+----------+------------------+------------------+ |
                                                              v                                       |
                                                     /--------------------\ NO                        | 
@@ -439,16 +414,16 @@ PSK-ECDHE)   |                              (ECDHE)                             
              |                              |                     /--------------------------\NO   |
              |                              |                     | type is (certificate_    |     |
              |                              |                     | verify or post_handshake)|---+ |
-             |                              |                     | and dhe and dhe_proposed |   | |
              |                              |                     \--------------------------/   | |
              |                              |                            YES v                   | |
              |                              |                     /--------------------------\NO | |
-             |                              |                     | type is register_session_|   v |
-             |                              |                     | ticket and session_      |---+ |
+             |                              |                     | type is register_session_|   | |
+             |                              |                     | ticket and               |   v |
+             |                              |                     | session_resumption       |---+ |
              |                              |                     \--------------------------/   | |
         YES  v                         YES  v                            YES v                   | |
 /---------------------------\NO  /---------------------------\NO  /--------------------------\NO | |
-| psk and psk_proposed      |--+ | and dhe and dhe_proposed  |--+ | ctx_id in CTX_ID_DB      |---+ |
+| psk_proposed              |--+ | dhe_proposed              |--+ | ctx_id in CTX_ID_DB      |---+ |
 | psk_key in PSK_DB         |  | \---------------------------/  v \--------------------------/   v |
 \---------------------------/  +------------|-------------------+------------|-------------------+ |
              |                          YES |      +-------+    |        YES v                     |
