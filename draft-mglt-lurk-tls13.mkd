@@ -143,6 +143,19 @@ struct {
 
 # Exchange Description 
 
+The sequence of exchanges between the LURK client and the Cryptographic
+Service is determine by the policies of the TLS client and the TLS
+server. The policies on the TLS client will determine the proposed
+capabilities to the TLS server, such policies will be reflected on
+Cryptographic Service in term of necessary secrets and signing
+operations to implement such capabilities. The requests of secrets or
+signing operation determine the specific exchanges. Similarly, on the
+TLS server side, the TLS server policies takes the TLS client
+capabilities as inputs and determines the necessary secrets and signing
+operations to implement such policies. As for the TLS client, the
+various combination of necessary secrets and signing operations
+determines the exchanges between the LURK client and the Cryptographic
+Service. 
 
 The Cryptographic Service is not expected to perform any policies such
 as choosing the appropriated authentication method. Such choices are
@@ -154,11 +167,420 @@ role:
 defines if LURK exchanges happen on a TLS client or a TLS server.
 
 session_resumption:
-is set when the TLS server provides session resumption or when the TLS
-client wants to perform session resumption. By default it is set. The
-motivation for having this parameter is to prevent the Cryptographic
-Service to deal with NewSessionTickets when no session resumption is
-used. 
+is optional and is set when the TLS server provides session resumption
+or when the TLS client wants to perform session resumption. By default
+it is set. The motivation for having this parameter is to prevent the
+Cryptographic Service to deal with NewSessionTickets when no session
+resumption is used. 
+
+## Message Exchange Description
+
+The exchanges between the LURK client and the Cryptographic Service are
+designated as exchange and are constituted by a TLS13Request and a
+TLS13Response.
+
+The purpose of the exchange is:
+* to retrieve necessary secrets to derive the necessary keys and proceed
+to the TLS handshake
+* to perform a signing operation to authenticate both the TLS client or
+ the TLS server.  
+* to manage NewSessionTickets for future session resumption. The TLS
+server will request the generation of NewSessionTickets while the TLS
+client register these NewSessionTicket
+
+Except for the post handshake authentication, the request for a signing
+operation (init_certificate_verify and certificate_verify exchanges) is
+combined to a request for secrets.
+
+
+~~~
+struct {
+    select (TLS13Type) {
+        case binder_key, early_secrets, app_secrets:
+            LurkEarlySecretRequest;
+        case handshake_and_app_secrets, handshake_secret:
+            LurkHandshakeSecretRequest
+        case init_certificate_verify, cerificate_verify:
+            LurkCertificateVerifyRequest;
+        case post_handshake: LurkPostHandshakeRequest
+        case new_session_ticket:  LurkNewSessionTicketRequest;
+        case register_session_ticket: LurkRegisterSessionTicketRequest;
+    };
+} TLS13Request;
+
+
+struct {
+    select (TLS13Type) {
+        case binder_key, early_secrets, handshake_and_app_secrets,
+            handshake_secrets, app_secrets: LurkSecretResponse;
+        case init_certificate_verify, certificate_verify, post_handshake:
+            LurkCertificateVerifyResponse;
+        case new_session_ticket:  LurkNewSessionTicketResponse;
+        case register_session_ticket: LurkRegisterSessionTicketResponse;
+    };
+}; TLS13Response
+~~~
+
+## Key Schedule Context Request 
+
+The LURK client and the Cryptographic proceeds to a sequence of
+exchanges and the coherence between them is controlled through a key
+schedule context (ks_ctx). This context is agreed between the LURK
+client during the first exchange of a Context ID exchange of types
+init_client, init_server. The remaining exchanges have a Context ID of
+type opaque that indicates the negotiated session_id and a cookie that
+is unpredictable for a passive attacker. When a Context ID of type
+opaque is used by the LURK client, the Cryptographic does not return any
+Context ID. 
+
+To establish a session with the Cryptographic Service, the LURK client
+provides a ContextID type of type init_client. The LURK client specifies
+if there is a specific PSK to initiate the key schedule. If a PSK is
+indicated the Cryptographic checks the PSK is available. In case the PSK
+is not available, an invalid_psk error is returned. If the PSK is not
+provided, a default PSK is generated as described in {{!RFC8446}}
+section 7.1. If the default PSK is not allowed then an invalid PSK is
+returned. The LURK client also specifies the freshness_funct used to
+provide perfect forward secrecy as defined in {{sec:pfs}}. If the
+Cryptographic Service does not support the freshness_funct, an
+invalid_freshness_funct error is returned. The LURK client also adds
+h_opaque which is the hash function used to generate the future cookies.
+If the Cryptographic Service does not support h_opaque an
+invalid_h_opaque error is returned. 
+
+Upon receiving a ContextID of type init_client, the Cryptographic
+Service responds with a ContextID of type init_server whihc contains a
+session_id used by the Cryptographic Service to identify the session
+between the LURK client and the Cryptographic Service. The LURK client
+is expected to include this session_id into the future ContextID of type
+opaque. 
+
+Upon receiving a ContextID of type opaque, the Cryptographic associates
+the initiated key scheduler context using the session_id and check the
+value of cookie as defined in {{sec:cookie}}. If a mismatch occurs the
+Cryptographic Service MAY discard the request or respond with a
+invalid_request.  The binding between the ContextID type and the
+TLS13Request type is mentioned below. 
+
+
+Upon receiving a ContextID type that is not supported, the Cryptographic
+Service returns an invalid_ctx_type.
+
+The table below represents the compatible exchange with Context ID
+types. init indicates the the TLS13REquest has a Context ID type set to
+init_client while the TLS13Response has a Context ID type set to
+init_server.
+
+On the TLS server side, a session is initiated by the early_secret when
+the TLS server needs one of the early secrets. The TLS server may need
+the binder_key when a PSK or PSK-ECDHE authentication is proposed in the
+ClientHello message and the TLS server selects one of these PSK.   
+When the TLS server proceeds to ECDHE authentication, then the session
+is initiated with a init_certificate_verify.
+
+On the TLS client side, a session may be initiated by a binder_key when
+PSK or PSK-ECDHE authentication is proposed or handshake_secret when
+only ECDHE authentication is proposed.  
+
+~~~
++--------+--------------------------+--------------+
+|  Role  | exchange                 | ctx_id_type  |
++--------+--------------------------+--------------+
+| server | early_secret             | init         |
+| server | init_certificate_verify  | init         |
+| server | handshake_and_app_secret | opaque       | 
+| server | new_session_ticket       | opaque       |
+| client | binder_key               | init         |
+| client | early_secret             | opaque       | 
+| client | handshake_secret         | init /opaque |
+| client | app_secret               | opaque       | 
+| client | certificate_verify       | opaque       |
+| client | register_session_ticket  | opaque       |
+| client | post_handshake           | opaque       |
++--------+--------------------------+--------------+
+~~~
+
+~~~
+enum { init_request(0), init_response(1),  opaque(2), 255 } ContextIDType
+enum { false(0), true(1) 255 } HasPSK
+
+
+
+struct {
+    ContextType ctx_type
+    select(ctx_type) {
+       case init_client:
+           HasPSK has_psk
+           select(has_psk) {
+               case true: PskIdentity psk_id; //RFC8446 section 4.2.11
+            }
+           PFSAlgorithm freshness_funct;  // {{!I-D.mglt-lurk-tls12}} section 4.1
+           PFSAlgorithm h_opaque;
+       case opaque:
+           unint32 session_id;
+           unint32 cookie;
+    };
+} ContextID;
+
+struct {
+    select(ContextIDRequest.ctx_type) {
+        case init_request:
+            ContextType ctx_type  // init_response
+            uint32 session_id
+    };
+} ContextIDResponse
+~~~
+
+### Perfect Forward Secrecy {#sec:pfs}
+
+Perfect forward secrecy is implemented in a similar manner as with the
+TLS 1.2 extension described in {{?draft-mglt-lurk-tls12}} section 4.1.1.
+As ServerHello.random in TLS 1.3 do not include time, it is not
+considered here. In addition, we use a specific context related to TLS
+1.3. 
+
+As a result, the ServerHello.random is generated as follows on the TLS
+server. 
+
+~~~
+ServerHello.random = freshness_funct( server_random + "tls13 pfs srv" );
+~~~
+
+The ClientHello.random is generated as follows on the TLS client side:
+
+~~~
+ClientHello.random = freshness_funct( server_random + "tls13 pfs clt" );
+~~~
+
+
+Perfect forward secrecy applies to the ServerHello.random on the TLS
+server and on the ClientHello.random on the TLS client. As a result, PFS
+is provided on the TLS server as long as the ServerHello is part of the
+Handshake Context. Similarly PFS is provided on the TLS client as long
+as ClientHello is part of the Handshake Context. On the TLS server,
+early_secret exchange do not have the ServerHello so this exchange is
+not protected by PFS later exchanges are. On teh TLS client side,
+binder_key does not have any Handshake Context so this exchange is not
+protected by PFS. Later exchanges are. 
+
+### Cookie {#sec:cookie}
+
+The cookie mechanism is intended to prevent an attacker to perform an
+exchange within a session established between the LURK client and the
+Cryptographic Service. Cookies of the next TLS13Requests are generated
+as follows:
+
+~~~
+cookie_0 = session_id
+cookie_n+1 = HKDF-Expand-Label(TLS13Request,
+                        "cookies", cookie_n, Hash.length)
+~~~
+
+The 32 most significant bits are sent and Hash is designated by
+h_opaque. The LURK client starts with cookie_0. 
+
+When the Cryptographic Service does not receive the expected cookie, the
+request is discarded or an invalid_request error is sent.
+
+## Secret Request and SecretResponse
+
+Secrets are derived from the key schedule of {{!RFC8446}} section 7.1.
+The derivation of secrets does not requires the same inputs. In our case
+binder_key, client_early_traffic_secret server_early_traffic_secret and
+early_exporter_master_secre are designated as early sercrets. Their
+derivation requires the PSK and except for the binder_key some Handshake
+Context. client_handshake_traffic_secret, and
+server_handshake_traffic_secret are designated as handshake secrets and
+secrets processed further are designated as application secrets. Both
+handshake and application secrets requires the additional ECDHE share
+secret as well as a specific Handshake Context. 
+
+The request to generate secrets from the LURK client is performed via
+the EarlySecretsRequest and HandshakeSecretRequest. 
+
+The PSK is provided in the EarlySecretRequest via the Context ID of type
+init_id. The value is then stored in a key schedule context (ks_ctx) and
+use for further secrets.  When ECDHE share secret needs to be provided
+for handshake and application secret the Ephemeral Secret is provided so
+the Cryptographic Service can derive the ECDHE share secret. The public
+part would be taken from the Handshake Context.  For each request the
+secrets are specified using key_request and the specific Context
+Handshake is specified via handshake_context. The Handshake Context is
+also stored in the key schedule context (ks_ctx) to avoid the lURK
+client sending multiple time the same data.   
+
+~~~
+struct {
+    uint16 key_request;
+    Handshake handshake_context<0..2^32> //RFC8446 section 4.
+} EarlySecretsRequest;
+
+EphemeralSecret{
+
+}
+
+struct {
+    SecretsRequest secret_request;
+    EphemeralSecret ephemeral_secret;
+} HandshakeSecretRequest;
+
+struct {
+    Secret secret_list<0..2^16-1>;
+} SecretsResponse;
+~~~
+
+ctx_id:
+initializes the key schedule context of the Cryptographic Service and
+set the PSK when set to type init_id. For future exchange the ctx_id
+enforces the origin and appropriate sequence of requests. (see section
+{{sec:ctx_id}})
+
+key_request:
+designates the requested secrets (see section {{sec:key_request}}).
+
+handshake_context: 
+the necessary messages so the Cryptographic Service is aware of the
+appropriated Handshake Context to generate the secrets (see section
+{{sec:handshake_context}}).
+
+ephemeral_secrets:
+private part of the ECDHE using PKCS10 format.
+
+secret_list:
+the list of requested secrets (see section {{sec:secrets}}.
+
+## Signing Request and Response 
+
+The signature requires the signature scheme (sig_algo), the designated
+private key (key_id), as well as sufficient context to generate the
+necessary data to be signed. In our case the necessary context is
+provided by the LURKCertificate, assuming the Cryptographic Service will
+have the necessary Handshake Context. The latest may be provided in a
+combination of a secret request. 
+
+key_id is processed as described in {{?draft-mglt-lurk-tls12}} section
+4.1. If the Cryptographic Service does not support the KeyPairIdType an
+invalid_key_id_type is returned. If the Cryptographic Service does not
+recognize the key, an invalid_key_id error is returned.  
+
+sig_algo designates the signature algorithm scheme, and it is defined in
+{{!RFC8446} section 4.2.3. When the Cryptographic Service does not
+support the signature scheme an invalid_signature_scheme error is
+returned. 
+
+The certificate is a public data that may repeat over multiple distinct
+TLS handsahkes. To limit the load of unnecessary information being
+transmitted multiple times, the LURKCertificate enable to carry the
+index of the Certificate structure rather than the structure itself.
+When the lurk_certificate_type is set to sha256_32, the index of the
+Certificate structure is sent. The current specification generates the
+index using sha256_32 as defined in {{?draft-mglt-lurk-tls12}}, that is
+the first 32 bits of the hash of the Certificate structure using SHA256
+as the hashing function. When lurk_certificate_type is set to tls13 the
+Certificate structure is expected. When the Cryptographic Service does
+not support the certificate_type, an invalid_certificate_type error is
+returned. When the Certificate structure does not match the private key,
+an invalid_certificate error is returned. 
+
+Signing operations are described in {{!RFC8446}} section 4.4.3. The
+context string is derived from the role and the type of the TLS13Request
+as described below. The Handshake Context is taken from the key schedule
+context.   
+
+~~~
++--------+-------------------------+-------------------------------------+
+| role   | type                    | context                             |
++--------+-------------------------+-------------------------------------+
+| server | init_certificate_verify | "TLS 1.3, server CertificateVerify" |
+| client | certificate_verify      | "TLS 1.3, client CertificateVerify" |
++--------+-------------------------+-------------------------------------+
+~~~
+
+The Cryptographic Service computes the signature as described in
+{{!RFC8446}} section 4.4.3. and returns signature in SigningResponse.
+When the Cryptographic Service does not have the necessary Handshake
+Context, context or is unable to proceeds to the signing operation, an
+invalid_certificate_verify error is returned. 
+
+
+~~~
+enum { tls13(0), sha256_32(1) (255)}; LURKCertificateType
+
+struct {
+    lurk_certificate_type;
+    select (lurk_certificate_type) {
+        case sha256_32:
+            uint32 hash_cert;
+        case tls13:
+            Certificate tls13_certificate; // RFC8446 section 4.4.2
+    };
+} LURKCertificate;
+
+
+
+
+struct {
+    KeyPairId key_id; // draft-mglt-lurk-tls12 section 4.1
+    SignatureScheme sig_algo; //RFC8446 section 4.2.3.
+    LURKCertificate certificate; 
+} SigningRequest;
+
+
+struct {
+    opaque signature<0..2^16-1>; //RFC8446 section 4.4.3.
+} SigningResponse; 
+~~~
+
+
+
+
+## key_request {#key_request}
+
+The requested secrets are requested via key_request. While the
+structure is generic for multiple exchange, the LURK client is expected
+to only request a subset of secrets. This is interpreted as expectation
+from the LURK client and the TLS applies restrictions based on its
+configuration and key schedule handshake. Expected secrets and
+acceptable secrets are defined for each exchange. The current structure
+of key_request is defined below:   
+* bit 0 : binder_key
+* bit 1 : client_early_traffic_secret
+* bit 2 : early_exporter_master_secret 
+* bit 3 : client_handshake_traffic_secret
+* bit 4 : server_handshake_traffic_secret
+* bit 5 : client_application_traffic_secret_0
+* bit 6 : server_application_traffic_secret_0
+* bit 7 : exporter_master_secret
+* bit 8-15: reserved and set to zero
+
+
+## secret {#secret}
+
+
+~~~
+enum {
+    binder_key (0),
+    client_early_traffic_secret(1),
+    early_exporter_master_secret(2),
+    client_handshake_traffic_secret(3),
+    server_handshake_traffic_secret(4),
+    client_application_traffic_secret_0(5),
+    server_application_traffic_secret_0(6),
+    exporter_master_secret(7)
+    (255)
+} SecretType;
+
+struct {
+    SecretType secret_type;
+    opaque secret_data<0..2^8-1>;
+} Secret;
+~~~
+
+
+
+## handshake_context
+
+
 
 The secrets generated by the Cryptographic Service are also limited by
 the capabilities of the TLS client or TLS server. In some cases, such
@@ -198,40 +620,11 @@ The received or to be formed ClientHello contains a early_data extension.
 post_handshake_proposed:
 The received or to be formed ClientHello contains a post_handshake_auth extension.
 
-The exchanges between the LURK client and the Cryptographic Service are
-designated as exchange and are constituted by a TLS13Request and a
-TLS13Response.
-
-~~~
-struct {
-    select (TLS13Type) {
-        case binder_key, early_secrets, app_secrets:
-            SecretRequest;
-        case handshake_and_app_secrets, handshake_secret:
-            HandshakeSecretRequest
-        case init_certificate_verify, cerificate_verify:
-            CertificateVerifyRequest;
-        case post_handshake: PostHandshakeRequest
-        case new_session_ticket:  NewSessionTicketRequest;
-        case register_session_ticket: RegisterSessionTicketRequest;
-    };
-} TLS13Request;
 
 
-struct {
-    select (TLS13Type) {
-        case binder_key, early_secrets, handshake_and_app_secrets,
-            handshake_secrets, app_secrets: SecretResponse;
-        case init_certificate_verify, certificate_verify, post_handshake:
-            CertificateVerifyResponse;
-        case new_session_ticket:  NewSessionTicketResponse;
-        case register_session_ticket: RegisterSessionTicketResponse;
-    };
-}; TLS13Response
-~~~
 
 
-The sequence of exchange is defined by a state diagram defined for the
+is defined by a state diagram defined for the
 LURK client and the Cryptographic Service respectively located on the
 TLS client and the TLS server. Each entity maintains the various key
 schedule context (ks_ctx) which among other contains the necessary
@@ -264,6 +657,7 @@ Key_DB:
 contains the asymetric signing keys with supported signing
 algorithms.
 
+# State diagrams
 
 ## TLS client: LURK client
 
@@ -274,7 +668,7 @@ algorithms.
                        |                           |
                        v                           |
   psk  ---> +--------------------+                 |
-            | BinderKey          |                 |
+            | binder_key         |                 |
             +--------------------+                 |
 EARLY_EXPORTER, 0-RTT  |                           |
                 v      |                           |
@@ -521,22 +915,6 @@ represented by a sequence of request. The purpose of the ctx_id is to
 initiate the sequence with a type of init_id or to assert the request is
 legitimate with ctx_id of type opaque. 
 
-The requested secrets are requested via key_request. While the
-structure is generic for multiple exchange, the LURK client is expected
-to only request a subset of secrets. This is interpreted as expectation
-from the LURK client and the TLS applies restrictions based on its
-configuration and key schedule handshake. Expected secrets and
-acceptable secrets are defined for each exchange. The current structure
-of key_request is defined below:   
-* bit 0 : binder_key
-* bit 1 : client_early_traffic_secret
-* bit 2 : early_exporter_master_secret 
-* bit 3 : client_handshake_traffic_secret
-* bit 4 : server_handshake_traffic_secret
-* bit 5 : client_application_traffic_secret_0
-* bit 6 : server_application_traffic_secret_0
-* bit 7 : exporter_master_secret
-* bit 8-15: reserved and set to zero
 
 
 The generation of secrets requires inputs such as PSK, ECDHE share
@@ -553,155 +931,13 @@ combined with secret generation (init_certificate_verify).
 
 
 
-~~~
-enum { init(0), opaque(1), 255 } ContextIDType
-enum { false(0), true(1) 255 } HasPSK
 
 
 
-struct {
-    ContextType ctx_type
-       case none:
-       case init_id:
-           HasPSK has_psk
-           select(has_psk) {
-               case true: PskIdentity psk_id; //RFC8446 section 4.2.11
-            }
-           PFSAlgorithm freshness_funct;  // {{!I-D.mglt-lurk-tls12}} section 4.1
-           PFSAlgorithm h_ctx_id
-           unint32 session_id
-           session_resumption // generates session_resumption and store it, with Hash algorithm /// configuration parameters
-       case opaque_id:
-           unint32 session_id;
-           unint32 context_id;
-} ContextID;
 
-
-
-enum {
-    binder_key (0),
-    client_early_traffic_secret(1),
-    early_exporter_master_secret(2),
-    client_handshake_traffic_secret(3),
-    server_handshake_traffic_secret(4),
-    client_application_traffic_secret_0(5),
-    server_application_traffic_secret_0(6),
-    exporter_master_secret(7)
-    (255)
-} SecretType;
-
-struct {
-    SecretType secret_type;
-    opaque secret_data<0..2^8-1>;
-} Secret;
-
-enum { tls13(0), sha256_32(1) (255)}; LURKCertificateType
-
-struct {
-    lurk_certificate_type;
-    select (lurk_certificate_type) {
-        case sha256_32:
-            uint32 hash_cert;
-        case tls13:
-            Certificate tls13_certificate; // RFC8446 section 4.4.2
-    };
-} LURKCertificate;
-
-
-struct {
-    ContextID ctx_id;
-    uint16 key_request;
-    Handshake handshake_context<0..2^32> //RFC8446 section 4.
-} SecretsRequest;
-
-
-enum { none(0), init(1), opaque(2), 255 } ContextIDType
-enum { false(0), true(1) 255 } HasPSK
-
-
-
-struct {
-    ContextType ctx_type
-       case none:
-       case init_id:
-           HasPSK has_psk
-           select(has_psk) {
-               case true: PskIdentity psk_id; //RFC8446 section 4.2.11
-            }
-##           Role role;
-           PFSAlgorithm freshness_funct;  // {{!I-D.mglt-lurk-tls12}} section 4.1
-           PFSAlgorithm h_ctx_id
-           unint32 session_id
-           session_resumption // generates session_resumption and store it, with Hash algorithm /// configuration parameters
-##           post-handshake    // keep the full exchange -- derived from clientHello
-##           0rtt // derived from client hello (early_data extension), serverHello (early_data extension) EndOfEarlydata, psk
-       case opaque_id:
-           unint32 session_id;
-           unint32 context_id;
-} ContextID;
-
-
-
-enum {
-    binder_key (0),
-    client_early_traffic_secret(1),
-    early_exporter_master_secret(2),
-    client_handshake_traffic_secret(3),
-    server_handshake_traffic_secret(4),
-    client_application_traffic_secret_0(5),
-    server_application_traffic_secret_0(6),
-    exporter_master_secret(7)
-    (255)
-} SecretType;
-
-struct {
-    SecretType secret_type;
-    opaque secret_data<0..2^8-1>;
-} Secret;
-
-enum { tls13(0), sha256_32(1) (255)}; LURKCertificateType
-
-struct {
-    lurk_certificate_type;
-    select (lurk_certificate_type) {
-        case sha256_32:
-            uint32 hash_cert;
-        case tls13:
-            Certificate tls13_certificate; // RFC8446 section 4.4.2
-    };
-} LURKCertificate;
-
-
-struct {
-    ContextID ctx_id;
-    uint16 key_request;
-    Handshake handshake_context<0..2^32> //RFC8446 section 4.
-} SecretsRequest;
-
-struct {
-    Secret secret_list<0..2^16-1>;
-    select(SecretRequest.ctx_id.context_type) {
-        case init:
-            uint32 session_id
-    };
-} SecretsResponse;
-
-
-### PCKS10 ?
-EphemeralSecret{
-
-}
-
-struct {
-    SecretsRequest secret_request;
-    EphemeralSecret ephemeral_secret;
-} HandshakeSecretRequest;
 
 struct {
     HandshakeSecretsRequest handshake_request;
-    KeyPairId key_id;
-    SignatureScheme sig_algo; //RFC8446 section 4.2.3.
-    LURKCertificate certificate;   //RFC8446 section 4.4.2.
 } CertificateVerifyRequest;
 
 
@@ -742,10 +978,12 @@ struct {
 
 ## early_secret
 
+## 
 
 
 # TLS client
 
+## early_secret
 
 
 

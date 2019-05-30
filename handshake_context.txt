@@ -466,49 +466,49 @@ PSK-ECDHE)   |                              (ECDHE)                             
 
 | Role   | Type                   |ctx_type|  key_request                         | handshake_context            | Condition         |
 
-| server | EarlySecret            | init   | binder_key                           |ClientHello                   | psk_proposed and  | 
+| server | srv_early_secret       | init   | binder_key                           |ClientHello                   | psk_proposed and  | 
 |        |                        |        | client_early_traffic_secret*         |                              | !server_only_dhe  |
 |        |                        |        | early_exporter_master_secret*        |                              | and server_0rtt   |
                                                                                                                                      
-| server | InitCertificateVerify  | init   | client_handshake_traffic_secrets     |ClientHello ... later of      | !psk_proposed or  |  
+| server |srv_certificate_verify  | init   | client_handshake_traffic_secrets     |ClientHello ... later of      | !psk_proposed or  |  
 |        |                        |        | server_handshake_traffic_secrets     |server EncryptedExtensions /  | server_only_dhe   |
 |        |                        |        | client_application_traffic_secret_0* |CertificateRequest            |                   |          
 |        |                        |        | server_application_traffic_secret_0* |                              |                   | 
 |        |                        |        | exporter_master_secret*              |                              |                   |
                                                                                    
-| server |HandshakeAndAppSecret   | opaque | client_handshake_traffic_secrets     |ServerHello ... later of      | psk_selected      |                   
+| server |srv_handshake_and_app_secret| opaque | client_handshake_traffic_secrets     |ServerHello ... later of      | psk_selected      |                   
 |        |                        |        | server_handshake_traffic_secrets     |server EncryptedExtensions /  | !dhe_server       |        
 |        |                        |        | client_application_traffic_secret_0* |CertificateRequest            |                   | 
 |        |                        |        | server_application_traffic_secret_0* |                              |                   |
 |        |                        |        | exporter_master_secret*              |                              |                   |
                                                                                     
-| server | NewSessionTickets      | opaque |                                      |earlier of client Certificate | server_resumption | 
+| server | srv_new_session_tickets      | opaque |                                      |earlier of client Certificate | server_resumption | 
 |        |                        |        |                                      |client CertificateVErify ...  |                   |
 |        |                        |        |                                      |client Finished               |                   |
 
 
-| client | BinderKey              | init   | binder_key                           |                              | psk_proposed      |
+| client | clt_binder_key         | init   | binder_key                           |                              | psk_proposed      |
                                                                                    
-| client | EarlySecret            | opaque | client_early_traffic_secret*         |ClientHello                   | psk_proposed and  |
+| client | clt_early_secret       | opaque | client_early_traffic_secret*         |ClientHello                   | psk_proposed and  |
 |        |                        |        | early_exporter_master_secret*        |                              | client_0rtt       |
                                                                                    
-| client | HandshakeSecret        | init   | client_handshake_traffic_secret      |ClientHello ... ServerHello   |                   |
+| client | clt_handshake_secret   | init   | client_handshake_traffic_secret      |ClientHello ... ServerHello   |                   |
 |        |                        | opaque | server_handshake_traffic_secret      |ServerHello                   |                   | 
 |                                                                                                                
                                                                                    
-| client | AppSecret              | opaque | client_application_traffic_secret_0* |server EncryptedExtensions ...| !client_dhe       |
+| client | clt_app_secret         | opaque | client_application_traffic_secret_0* |server EncryptedExtensions ...| !client_dhe       |
 |        |                        |        | server_application_traffic_secret_0* |server Finished               |                   |
 |        |                        |        | exporter_master_secret*              |                              |                   |
                                                                                                                  
-| client | CertificateVerify      | opaque | client_application_traffic_secret_0* |server EncryptedExtensions ...| client_dhe        |
+| client | clt_certificate_verify      | opaque | client_application_traffic_secret_0* |server EncryptedExtensions ...| client_dhe        |
 |        |                        |        | server_application_traffic_secret_0* |later of server Finished/     |                   |
 |        |                        |        | exporter_master_secret*              |EndOfEarlyData                |                   |
                                                                                    
-| client | RegisterSessionTickets | opaque |                                      |earlier of client Certificate | client_resumption |
+| client | clt_register_session_tickets | opaque |                                      |earlier of client Certificate | client_resumption |
 |        |                        |        |                                      |client CertificateVerify ...  | or post-handshake |
 |        |                        |        |                                      |client Finished               |                   | 
 
-| client | PostHandshake          | opaque |                                      |CertificateRequest            | post-handshake    |
+| client | clt_post_handshake          | opaque |                                      |CertificateRequest            | post-handshake    |
 
 
 
