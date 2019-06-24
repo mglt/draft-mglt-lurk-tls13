@@ -155,7 +155,7 @@ struct {
 ~~~
 
 
-# Exchange Description 
+# Generic structures 
 
 The sequence of exchanges between the LURK client and the Cryptographic
 Service is determine by the policies of the TLS client and the TLS
@@ -247,7 +247,7 @@ key_request is a 16 bit structure described in Table
 {{table:key_request_struct}} that indicates the requested key or secrets
 by the LURK client. The same structure is used across all LURK
 exchanges, but each LURK exchange only permit a subset of values
-described in Table {{table:key_request_values}}.
+described in Table {{table:key_request_value}}.
 
 A LURK client MUST NOT set key_request to key or secrets that are not
 permitted. The Cryptographic Service MUST check the key_request has only 
@@ -384,7 +384,7 @@ LURK exchange. Otherwise, it follows a early_secret LURK exchange in
 which case the provided handshake_context is ServerHello.  
 
 
-## Secret Sub Exchange (#sec:secret}
+## Secret Sub Exchange {#sec:secret}
 
 Secrets are derived from the key schedule of {{!RFC8446}} section 7.
 
@@ -431,7 +431,7 @@ extension_list:
 the list of extensions. 
 
 secret_list:
-the list of requested secrets (see section {{sec:secrets}}.
+the list of requested secrets (see section {{sec:secrets}}).
 
 
 
@@ -720,10 +720,12 @@ lurk_client_cookie.
 M indicates the extension is mandatory
 - indictaes the extension MUST NOT be provided
 ~~~
+{: #table:ctx_agreement title="Presence of the Context Agreement
+structure in the various LURK exchanges" }
 
 
 
-## Signing Sub-Exchange {sec:siging}
+## Signing Sub-Exchange {#sec:signing}
 
 The signature requires the signature scheme (sig_algo), the designated
 private key (key_id), as well as sufficient context to generate the
@@ -743,7 +745,7 @@ support the signature scheme an invalid_signature_scheme error is
 returned. 
 
 The certificate is a public data that may repeat over multiple distinct
-TLS handsahkes. To limit the load of unnecessary information being
+TLS handshakes. To limit the load of unnecessary information being
 transmitted multiple times, the LURKCertificate enable to carry the
 index of the Certificate structure rather than the structure itself.
 When the lurk_certificate_type is set to sha256_32, the index of the
@@ -805,13 +807,13 @@ struct {
 } SigningResponse; 
 ~~~
 
-## LURK exchange on the TLS server
+# LURK exchange on the TLS server
 
 This section describes the LURK exchanges that are performed on the TLS
 server. The state diagram is provided in section
 {{sec:state_diagram_server}} 
 
-## server: early_secret {#sec:early_secret}  
+## early_secret {#sec:early_secret}  
 
 
 A TLS server MAY receive a ClientHello that proposes PSK or PSK-ECDHE
@@ -866,18 +868,19 @@ The structure associated to the context agreement request defined in
 section {{sec:ctx_agreement}}
 
 secret_request:
-The structure associated to the secret request defined in {sec:secret} 
+The structure associated to the secret request defined in section {{sec:secret}} 
 
 ctx_response:
 The structure associated to the context agreement response defined in
 section {{sec:ctx_agreement}}
 
 secret_response:
-The structure associated to the secret request defined in {sec:secret} 
+The structure associated to the secret request defined in section
+{{sec:secret}}. 
 
 
 
-## server: init_certificate_verify {#sec:init_certificate_verify}
+## init_certificate_verify {#sec:init_certificate_verify}
 
 A TLS server MAY receive a ClientHello that proposes ECDHE
 authentication with a key_share extension. Depending on its policies,
@@ -925,7 +928,7 @@ struct{
 ctx_request, ctx_response, secret_request and secret_response are
 defined in section {{sec:early_secret}}.
 
-## server: handshake_and_app_secret {#sec:handshake_and_app_secret}
+## handshake_and_app_secret {#sec:handshake_and_app_secret}
 
 The handshake_and_app_secret is necessary to complete the ServerHello
 and always follows an early_secret LURK exchange. Such sequence is
@@ -976,7 +979,7 @@ value provided in the ContexAgreementRequest - see section
 lurk_client_cookie:
 cookie value generated as described in section {{sec:ctx_agreement}}.
 
-## new_session_tickets {#sec:new_session_ticket}}
+## new_session_tickets 
 
 new_session ticket handles session resumption. It enables to retrieve
 NewSessionTickets that will be forwarded to the TLS client by the TLS
@@ -1025,13 +1028,13 @@ designates the requested number of NewSessionTicket. In the case of
 delegation this number MAY be set to zero. The Cryptographic Service MAY
 responds with less tickets when the value is too high.
 
-## LURK exchange on the TLS client
+# LURK exchange on the TLS client
 
 This section describes the LURK exchanges that are performed on the TLS
 server. The state diagram is provided in section
 {{sec:state_diagram_client}} 
 
-## client: binder_key  
+## binder_key  
 
 The binder_key LURK exchange is initiates a LURK session when the TLS
 client is willing to propose a PSK for PSK or PSK-ECDHE authentication. 
@@ -1044,7 +1047,7 @@ requested.
 The binder_key is equivalent to a secret LURK exchange and there is no
 creation of a ks_ctx. 
 
-## client: early_secret
+## early_secret
 
 early_secret on the TLS client side works similarly as the early_secret
 LURK exchange on the TLS server as described in section
@@ -1054,19 +1057,19 @@ be omited even when PSK or PSK-ECDHE authentication has been chosen by
 the TLS client. The early_secret will only be performed in the case of
 0-RTT handshake or when early exporters are required.   
 
-## client: handshake_secret {#handshake_secret}
+## handshake_secret {#sec:handshake_secret}
 
 The handshake_secret is performed after an early_secret LURK exchange.
 This exchange is performed in the case of an PSK or PSK-ECDHE
 authentication and coherence with the handshake context MUST be checked
 by the LURK client as well as by the Cryptographic Service as described
-in {{sec:early_secret}} and section {{sec:handshake_and_app}}. 
+in {{sec:early_secret}} and section {{sec:handshake_and_app_secret}}. 
 
 The structures of the handshake_secret follow those of the
 handshake_and_app_secret described in section
-{{handsahke_and_app_secret}}. 
+{{sec:handshake_and_app_secret}}. 
 
-## client: init_handshake_secret 
+## init_handshake_secret 
 
 The handshake_secret LURK exchange MAY be initiating a session between
 the LURK client and the Cryptographic Service in which case it contains
@@ -1100,7 +1103,7 @@ struct{
 ~~~
 
 
-## client: app_secret
+## app_secret
 
 The app_secret LURK exchange is performed when no TLS client
 authentication has been requested, i.e. CertificateRequest message is
@@ -1119,7 +1122,7 @@ session resumption or post_handshake, the LURK session is finished. The
 support for post_handshake by the TLS client is indicated by the
 post_handshake_auth extension.
 
-## client: certificate_verify
+## certificate_verify
 
 The certificate_verify LURK exchange is performed when TLS client
 authentication has been requested by the TLS server. When performed, the
@@ -1225,7 +1228,7 @@ struct {
 } PostHandshakeResponse;
 ~~~
 
-handshake_context is defined in section {{sec:handshake}}
+handshake_context is defined in section {{sec:handshake_context}}
 
 app_n:
 describes the number of iteration of the session keys. 
@@ -1756,7 +1759,7 @@ Handshake Context are required for its computation describe din
 
 
 
-## TLS 1.3 Full Handshake with ECDHE authentication only, no TLS client authentication 
+## TLS 1.3 ECDHE Full Handshake  {#sec:ecdhe_no_resumption} 
 
 
 This example illustrates the case of a TLS handshake where the TLS
@@ -1764,7 +1767,7 @@ server is authenticated using ECDHE only, that is not PSK or PSK-ECDHE
 authentication is provided and so session resumption is not provided
 either. 
 
-### TLS Client: ClientHello (#sec:ecdhe-no-resumption-client-hello}
+### TLS Client: ClientHello 
 
 The TLS client does not provides any PSK and  omits the pre_shared_key as
 well as the psk_key_exchange_mode extensions. Note that omiting the
@@ -1782,7 +1785,7 @@ TLS Client                                   TLS Server
          v + signature_algorithms ---------> 
 ~~~
 
-### TLS Server: ServerHello  (#sec:ecdhe-no-resumption-server-hello}
+### TLS Server: ServerHello 
 
 
 Upon receiving the ClientHello, the TLS server determines the TLS client
@@ -1857,7 +1860,7 @@ response.
 As session resumption is not provided, teh LURK server goes into a
 finished state and delete the ks_ctx. 
 
-### TLS client: client Finished (#sec:ecdhe-no-resumption-client-finished}
+### TLS client: client Finished 
 
 Upon receiving the ServerHello message, the TLS client retrieve the
 handshake and application secrets to decrypt the messages receives from
@@ -1933,7 +1936,7 @@ enables it to compute the application secrets.
 As no session resumption is provided, the Cryptographic Service and the
 LURK client goes into a finished state and delete their ks_ctx. 
 
-## TLS 1.3 Full Handshake with ECDHE authentication only and session resumtpion, no TLS client authentication  {#sec:ecdhe-resumption}
+## TLS 1.3 Handshake with session resumption {#sec:ecdhe_resumption}
 
 This scenario considers that the TLS server is authenticated using ECDHE
 only in the first time and that further TLS handshake use the session
@@ -1941,7 +1944,7 @@ resumption mechanism. The first TLS Handshake is very similar as the
 previous one. The only difference is that psk_key_exchange_mode
 extension is added to the ClientHello. However, as no PSK identity is
 provided, the Full exchange is performed as described in section
-{{sec:ecdhe-no-resumption}}.  
+{{sec:ecdhe_no_resumption}}.  
 
 The only change is that session resumption is activated, and thus LURK
 client and LURK servers do not go in a finished state and close the LURK
@@ -1955,7 +1958,7 @@ next_request of the ks_ctx is set to nes_session_request.
 
 
 The Full TLS Handshake use ECDHE authentication. It is very similar to
-the logic described in section {{sec:ecdhe-no-resumption}}. The TLS
+the logic described in section {{sec:ecdhe_no_resumption}}. The TLS
 handshake is specified below for convenience. 
 
 ~~~
@@ -2189,11 +2192,11 @@ The Cryptographic Service returns the necessary secret to the TLS server
 to complete the ServerHello response. 
 
 The remaining of the TLS handshake is proceeded similarly as described
-in the Full Handshake in section {{sec:ecdhe-resumption}}.  
+in the Full Handshake in section {{sec:ecdhe_resumption}}.  
 
 
 
-## 0-RTT handsahke
+## TLS 1.3 0-RTT handshake
 
 The 0-RTT Handshake is a PSK or PSK-ECDHE authentication that enables
 the TLS client to provide application data during the first round trip.
@@ -2276,8 +2279,8 @@ exchange.
 
 The TLS client proceeds as described in handshake based on ECDHE, PSK or
 PSK-ECDHE authentications described in
-{{sec:ecdhe-no-session-resumption}} and
-{{sec:ecdhe-session-resumption}}. The main difference is that upon
+{{sec:ecdhe_no_resumption}} and
+{{sec:ecdhe_resumption}}. The main difference is that upon
 requesting handshake and application secrets, using an HandshakeRequest
 the TLS client will not provide the ClientHello as part as the
 handshake_context. The Client as already been provided during the
