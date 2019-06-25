@@ -1410,8 +1410,8 @@ client Finished     |                     |
 
 
 The LURK client post handshake diagram is represented below:
-~~~
 
+~~~
 POST_HANDSHAKE_AUTH        |
                 v          v
              /-------------------------\ NO
