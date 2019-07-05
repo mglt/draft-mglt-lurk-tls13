@@ -4,8 +4,8 @@
 
 LURK                                                          D. Migault
 Internet-Draft                                                  Ericsson
-Intended status: Standards Track                           June 25, 2019
-Expires: December 27, 2019
+Intended status: Standards Track                           July 04, 2019
+Expires: January 5, 2020
 
 
          LURK Extension version 1 for (D)TLS 1.3 Authentication
@@ -32,7 +32,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on December 27, 2019.
+   This Internet-Draft will expire on January 5, 2020.
 
 Copyright Notice
 
@@ -53,9 +53,9 @@ Copyright Notice
 
 
 
-Migault                 Expires December 27, 2019               [Page 1]
+Migault                  Expires January 5, 2020                [Page 1]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
 Table of Contents
@@ -109,9 +109,9 @@ Table of Contents
 
 
 
-Migault                 Expires December 27, 2019               [Page 2]
+Migault                  Expires January 5, 2020                [Page 2]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
      9.6.  TLS 1.3 0-RTT handshake . . . . . . . . . . . . . . . . .  46
@@ -165,9 +165,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019               [Page 3]
+Migault                  Expires January 5, 2020                [Page 3]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
        tls13 (2), (255)
@@ -221,9 +221,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019               [Page 4]
+Migault                  Expires January 5, 2020                [Page 4]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
                TLS13Type;
@@ -277,9 +277,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019               [Page 5]
+Migault                  Expires January 5, 2020                [Page 5]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    +--------+--------------------------+------------------------+
@@ -333,9 +333,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019               [Page 6]
+Migault                  Expires January 5, 2020                [Page 6]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    +------+-------------------------------------------+
@@ -389,9 +389,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019               [Page 7]
+Migault                  Expires January 5, 2020                [Page 7]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    enum {
@@ -445,9 +445,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019               [Page 8]
+Migault                  Expires January 5, 2020                [Page 8]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
 +--------+--------------------------+----------------------------------+
@@ -501,9 +501,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019               [Page 9]
+Migault                  Expires January 5, 2020                [Page 9]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
  enum { psk_id(1), ephemeral(2), freshness(3) ... (255) } ExtensionType;
@@ -557,9 +557,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 10]
+Migault                  Expires January 5, 2020               [Page 10]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    from the LURK client with the public part of the ECDHE missing.  The
@@ -613,9 +613,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 11]
+Migault                  Expires January 5, 2020               [Page 11]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
 3.4.2.  PSK_id Extension
@@ -669,9 +669,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 12]
+Migault                  Expires January 5, 2020               [Page 12]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
 3.4.3.  Freshness Extension
@@ -725,9 +725,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 13]
+Migault                  Expires January 5, 2020               [Page 13]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    As a result, the ServerHello.random is generated as follows on the
@@ -781,9 +781,9 @@ ClientHello.random = freshness_funct( server_random + "tls13 pfs clt" );
 
 
 
-Migault                 Expires December 27, 2019              [Page 14]
+Migault                  Expires January 5, 2020               [Page 14]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    cookie_h: The hash function used to generate the cookies throughout
@@ -837,9 +837,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 15]
+Migault                  Expires January 5, 2020               [Page 15]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    responses sent to the LURK client.  The resulting cookie is
@@ -893,9 +893,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 16]
+Migault                  Expires January 5, 2020               [Page 16]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    enables to carry the index of the Certificate structure rather than
@@ -949,9 +949,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 17]
+Migault                  Expires January 5, 2020               [Page 17]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    enum { tls13(0), sha256_32(1) (255)}; LURKCertificateType
@@ -1005,9 +1005,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 18]
+Migault                  Expires January 5, 2020               [Page 18]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    Upon receiving an early_secret request, the Cryptographic Service
@@ -1061,9 +1061,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 19]
+Migault                  Expires January 5, 2020               [Page 19]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    The Cryptographic MUST ensure the ServerHello has selected the ECDHE
@@ -1117,9 +1117,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 20]
+Migault                  Expires January 5, 2020               [Page 20]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    the ServerHello.  In addition, the selected identity MUST be the one
@@ -1173,9 +1173,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 21]
+Migault                  Expires January 5, 2020               [Page 21]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    only initiated if the TLS server expects to perform session
@@ -1229,9 +1229,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 22]
+Migault                  Expires January 5, 2020               [Page 22]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    The handshake_context is empty as the ClientHello is under
@@ -1285,9 +1285,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 23]
+Migault                  Expires January 5, 2020               [Page 23]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    struct{
@@ -1341,9 +1341,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 24]
+Migault                  Expires January 5, 2020               [Page 24]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    After the app_secret LURK exchange, unless the TLS client supports
@@ -1397,9 +1397,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 25]
+Migault                  Expires January 5, 2020               [Page 25]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    struct {
@@ -1453,9 +1453,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 26]
+Migault                  Expires January 5, 2020               [Page 26]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    In other way, it MUST NOT leverage this for: * any operations outside
@@ -1509,9 +1509,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 27]
+Migault                  Expires January 5, 2020               [Page 27]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    Note that when access to the Cryptographic Service on the TLS server
@@ -1565,9 +1565,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 28]
+Migault                  Expires January 5, 2020               [Page 28]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    Note that SESSION_RESUMPTION, POST_HANDSAHKE_AUTH are mostly
@@ -1621,9 +1621,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 29]
+Migault                  Expires January 5, 2020               [Page 29]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    0rtt_proposed: Indicates the TLS client supports early data which is
@@ -1677,9 +1677,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 30]
+Migault                  Expires January 5, 2020               [Page 30]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
                  TLS Client Policy for authentication
@@ -1733,9 +1733,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 31]
+Migault                  Expires January 5, 2020               [Page 31]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
 POST_HANDSHAKE_AUTH        |
@@ -1789,9 +1789,9 @@ NewSessionTickets /---------------------\ NO        ----> | post_hand_auth_propo
 
 
 
-Migault                 Expires December 27, 2019              [Page 32]
+Migault                  Expires January 5, 2020               [Page 32]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
        TLS13Request
@@ -1845,9 +1845,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 33]
+Migault                  Expires January 5, 2020               [Page 33]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
                    TLS Server Policy for authentication
@@ -1901,9 +1901,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 34]
+Migault                  Expires January 5, 2020               [Page 34]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
        TLS13Request
@@ -1957,9 +1957,9 @@ PSK-ECDHE   v                                                           |
 
 
 
-Migault                 Expires December 27, 2019              [Page 35]
+Migault                  Expires January 5, 2020               [Page 35]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    PSK secret: When PSK or PSK-ECDHE authentication is selected, the PSK
@@ -2013,9 +2013,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 36]
+Migault                  Expires January 5, 2020               [Page 36]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    server.  Similarly to the key schedule, the Hash function is defined
@@ -2069,9 +2069,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 37]
+Migault                  Expires January 5, 2020               [Page 37]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    TLS Client                                   TLS Server
@@ -2125,9 +2125,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 38]
+Migault                  Expires January 5, 2020               [Page 38]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    The necessary Handshake Context to generate the handshake secrets are
@@ -2181,9 +2181,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 39]
+Migault                  Expires January 5, 2020               [Page 39]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    TLS Client
@@ -2237,9 +2237,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 40]
+Migault                  Expires January 5, 2020               [Page 40]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    Upon receiving the AppSecretRequest, the Cryptographic Service checks
@@ -2293,9 +2293,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 41]
+Migault                  Expires January 5, 2020               [Page 41]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
 9.5.2.  TLS server: NewSessionTicket
@@ -2349,9 +2349,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 42]
+Migault                  Expires January 5, 2020               [Page 42]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
 9.5.3.  TLS client: NewSessionTicket
@@ -2405,9 +2405,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 43]
+Migault                  Expires January 5, 2020               [Page 43]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    The TLS client may propose to the TLS Server multiple PSK.  Each of
@@ -2461,9 +2461,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 44]
+Migault                  Expires January 5, 2020               [Page 44]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
 9.5.4.2.  TLS server: ServerHello
@@ -2517,9 +2517,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 45]
+Migault                  Expires January 5, 2020               [Page 45]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    TLS Server
@@ -2573,9 +2573,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 46]
+Migault                  Expires January 5, 2020               [Page 46]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    TLS Client                                   TLS Server
@@ -2629,9 +2629,9 @@ Lurk Client                              Cryptographic Service
 
 
 
-Migault                 Expires December 27, 2019              [Page 47]
+Migault                  Expires January 5, 2020               [Page 47]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    The TLS client is able to send its ClientHello with associated
@@ -2685,9 +2685,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 48]
+Migault                  Expires January 5, 2020               [Page 48]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    TLS client side and includes the Handshake Context required to
@@ -2741,9 +2741,9 @@ Lurk Client                              Cryptographic Service
 
 
 
-Migault                 Expires December 27, 2019              [Page 49]
+Migault                  Expires January 5, 2020               [Page 49]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
    TLS Client
@@ -2797,9 +2797,9 @@ Internet-Draft                LURK/TLS 1.3                     June 2019
 
 
 
-Migault                 Expires December 27, 2019              [Page 50]
+Migault                  Expires January 5, 2020               [Page 50]
 
-Internet-Draft                LURK/TLS 1.3                     June 2019
+Internet-Draft                LURK/TLS 1.3                     July 2019
 
 
 Author's Address
@@ -2853,4 +2853,4 @@ Author's Address
 
 
 
-Migault                 Expires December 27, 2019              [Page 51]
+Migault                  Expires January 5, 2020               [Page 51]
