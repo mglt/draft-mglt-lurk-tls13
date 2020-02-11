@@ -52,23 +52,32 @@ architecture {{?I-D.mglt-lurk-lurk}}.
 The motivations for the LURK Extension TLS 1.3 are similar to those for
 the LURK use cases {{?I-D.mglt-lurk-tls-use-cases}}.  
 
-Interactions with the Cryptographic Service can be performed by the TLS
-Client as well as by the TLS Server. 
+Interactions with the Cryptographic Service (CS) can be performed by the
+TLS Client as well as by the TLS Server. 
 
-LURK defines an interface to a Cryptographic Service that stores the
-security credentials which include the PSK involved in a PSK or
-PSK-ECDHE authentication or the key used for signing  in an ECDHE
-authentication. As in the case of session resumption the PSK is derived
-from the resumption_master_secret during the key schedule {{!RFC8446}}
-section 7.1, these secret MAY requires similar protection as well.  On
-the other session resumption MAY also be delegated as in the LURK
-extension of TLS 1.2 {{?I-D.mglt-lurk-tls12}}.
+LURK defines an interface to a CS that stores the security credentials
+which include the PSK involved in a PSK or PSK-ECDHE authentication or
+the key used for signing  in an ECDHE authentication. In the case of
+session resumption the PSK is derived from the resumption_master_secret
+during the key schedule {{!RFC8446}} section 7.1, this secret MAY
+require similar protection as well. On the other hand session resumption
+MAY also be delegated as in the LURK extension of TLS 1.2
+{{?I-D.mglt-lurk-tls12}}.
 
 The current document extends the scope of the LURK extension for TLS 1.2
-in that it defines the Cryptographic Service on the TLS server as well 
-as on the TLS client and the Cryptographic Service can operate in non
-delegating scenarios.  
+in that it defines the CS on the TLS server as well as on the TLS client
+and the CS can operate in non delegating scenarios.  
 
+# Terminology
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+"SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+"OPTIONAL" in this document are to be interpreted as described in BCP 14
+[RFC2119][RFC8174] when, and only when, they appear in all capitals, as
+shown here.
+
+This document uses the terms defined {{!RFC8446}} and
+{{?I-D.mglt-lurk-tls12}}.
 
 # LURK Header {#sec-lurk-tls-header}
 
@@ -101,8 +110,6 @@ enum {
 
     invalid_psk
     invalid_freshness_funct
-    invalid_h_opaque
-    invalid_ctx_type
 
     invalid_request
     invalid_key_id_type 
@@ -142,30 +149,29 @@ struct {
 
 # Generic structures 
 
-The Cryptographic Service is not expected to perform any policies such
-as choosing the appropriated authentication method. Such choices are
-performed by the TLS client or TLS server that instruct the LURK client
-accordingly. These policies performed by TLS client or TLS server are
-not different from those performed on a standard TLS exchange. 
+The CS is not expected to perform any policies such as choosing the
+appropriated authentication method. Such choices are performed by the
+TLS client or TLS server that instruct the LURK client accordingly.
+Such enforced policies between the TLS client and the TLS server are
+those performed on a standard TLS exchange. 
 
-On the other hand, some Cryptographic Service MAY be optimized by
-implementing a subset of the specified possibilities described in this
-document.  Typically some implementations MAY not implement the session
-resumption or the post handshake authentication to avoid keeping states
-of a given session once the handshake has been performed. These
-capabilities of the Cryptographic Service MAY also in return impact the
-policies of the TLS client or TLS server. 
+On the other hand, some CS MAY be optimized by implementing a subset of
+the specified possibilities described in this document. Typically some
+implementations MAY not implement the session resumption or the post
+handshake authentication to avoid keeping states of a given session once
+the handshake has been performed. These capabilities of the CS MAY also
+in return impact the policies of the TLS client or TLS server. 
 
 These limitations are mentioned throughout the document, and even
-represented in the state diagrams, the recommendation is that the
-Cryptographic Service SHOULD NOT impact the policies of the TLS client
-or TLS server. Instead they SHOULD be able to optimize the Cryptographic
-Service to their policies via some configuration parameters presented in
-section {{sec:state_diagram_client}}. Such parameters are implementation
-dependent and only provided here as informative information.  
+represented in the state diagrams, the recommendation is that the CS
+SHOULD NOT impact the policies of the TLS client or TLS server. Instead
+they SHOULD be able to optimize the CS to their policies via some
+configuration parameters presented in section
+{{sec:state_diagram_client}}. Such parameters are implementation
+dependent and only provided here as informative.  
 
-This document defines the term role to specify whether the Cryptographic
-runs on a TLS client or a TLS service. 
+This document defines the role to specify whether the CS runs on a
+TLS client or a TLS service. The CS MUST be associated a single role.  
 
 LURK exchanges falls into three categories: 1) request of keys or
 secrets, 2) request of signing operations, and 3) requests for ticket
@@ -207,13 +213,12 @@ exchanges, but each LURK exchange only permit a subset of values
 described in Table {{table:key_request_value}}.
 
 A LURK client MUST NOT set key_request to key or secrets that are not
-permitted. The Cryptographic Service MUST check the key_request has only 
-permitted values and has all mandatory key or secrets set. If these two
-criteria are not met the Cryptographic Service MUST NOT perform the LURK
-exchange and SHOULD return a invalid_key_request error. If the
-Cryptographic Service is not able to to compute an optional key or
-secret, the Cryptographic Service MUST proceed the LURK exchange and
-ignore the optional key or secret. 
+permitted. The CS MUST check the key_request has only permitted values
+and has all mandatory keys or secrets set. If these two criteria are not
+met the CS MUST NOT perform the LURK exchange and SHOULD return a
+invalid_key_request error. If the CS is not able to compute an optional
+key or secret, the CS MUST proceed the LURK exchange and ignore the
+optional key or secret. 
 
 
 
@@ -293,13 +298,13 @@ The value of the secret.
 ## handshake_context {#sec:handshake_context}
 
 Secrets derivation takes Handshake Context as input. It is the
-responsibility of the Cryptographic Service to maintain this variable in
-an internal variable. On the other hand it is the responsibility of the
-LURK client to provide the necessary element so the Cryptographic
-Service got the necessary Handshake Context. The Handshake Context
-evolves during the key derivation schedule, the LURK client implements a
-incremental approach where only the missing part of the Handshake Context
-are provided. The main intention is to prevent the LURK client from
+responsibility of the CS to maintain this variable in an internal
+variable. On the other hand, it is the responsibility of the LURK client
+to provide the necessary element so the Cryptographic Service got the
+necessary Handshake Context. The Handshake Context evolves during the
+key derivation schedule, the LURK client implements an incremental
+approach where only the missing part of the Handshake Context are
+provided. The main intention is to prevent the LURK client from
 providing multiple time the same information as well as to perform
 extensive compatibility checks between the duplicated information
 provided.
@@ -350,17 +355,18 @@ The extensions considered in this document are defined as below:
 
 
 ~~~
-enum { psk_id(1), ephemeral(2), freshness(3) ... (255) } ExtensionType;
+enum { psk_id(1), ephemeral(2), freshness(3), session_id(4) ... (255) 
+} LURK13ExtensionType;
 
 struct {
-    ExtensionType extension_type;
+    LURK13ExtensionType extension_type;
     opaque extension_data<0..2^16-1>;
-} Extension
+} LURK13Extension
 
 struct {
     uint16 key_request;
     Handshake handshake_context<0..2^32> //RFC8446 section 4.
-    Extension extention_list<0...2^16>
+    LURK13Extension extention_list<0...2^16>
 } SecretsRequest;
 
 
@@ -375,7 +381,7 @@ key_request:
 designates the requested secrets (see section {{sec:key_request}}).
 
 handshake_context: 
-designates the necessary messages so the Cryptographic Service is aware
+designates the necessary messages so the CS is aware
 of the appropriated Handshake Context to generate the secrets (see
 section {{sec:handshake_context}}).
 
@@ -390,26 +396,23 @@ the list of requested secrets (see section {{sec:secrets}}).
 ### Ephemeral Extension {#sec:ephemeral}
 
 The Ephemeral structure carries the necessary information to generate
-the ECDHE input used to derive the secrets.  Multiple ways are
-envisioned to generate the ECDHE value:
+the ECDHE input used to derive the secrets. Multiple ways are envisioned
+to generate the ECDHE value:
 
-secret_provided:
-The LURK client MAY provide its secret value to the Cryptographic
-Service. In the case, the ephemeral extension MUST be provided. In this
-case the ECDHE value is derived using the public value of the peer read
-from Handshake Context. The Cryptographic MUST NOT return any data. 
+shared_secret_provided:
+When ECDHE shared secret are not generated by the CS, the LURK client
+provides the shared secret value to the CS via the ephemeral extension.
+The CS MUST NOT return any data. 
 
 secret_generated:
-The LURK client MAY request the Cryptographic Service to generate the
-secret value, in which case only the public value would be returned to
-the LURK client, which in turn would transmit it to the other peer. Note
-that in such cases the Cryptographic Service would receive an incomplete
-Handshake Context from the LURK client with the public part of the ECDHE
-missing. The Cryptographic Service MUST check the public value is
-missing and complete the Handshake Context accordingly before generating
-the secrets.  The Cryptographic Service MUST return an Ephemeral
-extension with the associated public values, using a KeyShareEntry as
-defined in section 4.2.8 of {{!RFC8446}}.
+When the ECDHE public/private keys are generated by the CS, the LURK
+client requests the CS the associated public value. Note that in such
+cases the CS would receive an incomplete Handshake Context from the LURK
+client with the public part of the ECDHE missing. The CS MUST check the
+public value is missing and complete the Handshake Context accordingly
+before generating the secrets. The CS MUST return an Ephemeral extension
+with the associated public values, using a KeyShareEntry as defined in
+section 4.2.8 of {{!RFC8446}}.
 
 Other methods may be defined in the future. 
 
@@ -417,12 +420,12 @@ When the extension is not found, the default values specified by
 {{!RFC8446}} are used instead.
 
 This extension MUST NOT be sent outside the LURK exchanges mentioned
-below. When received outside these exchanges, the Cryptographic Service
-SHOULD return an invalid_extension error. When the ephemeral is not
-supported, an invalid_ephemeral error SHOULD be returned.  
-The ephemeral extension MUST NOT appear more than once in a LURK
-session. When the extensions appears in more than one LURK exchange an
-invalid_ephemeral error SHOULD be returned 
+below. When received outside these exchanges, the CS SHOULD return an
+invalid_extension error. When the ephemeral is not supported, an
+invalid_ephemeral error SHOULD be returned.  The ephemeral extension
+MUST NOT appear more than once in a LURK session. When the extensions
+appears in more than one LURK exchange an invalid_ephemeral error SHOULD
+be returned 
 
 ~~~
 +--------+--------------------------+----------+
@@ -442,7 +445,7 @@ invalid_ephemeral error SHOULD be returned
 | client | post_handshake           |    -     |
 +--------+--------------------------+----------+
 M indicates the extension is mandatory
-- indictaes the extension MUST NOT be provided
+- indicates the extension MUST NOT be provided
 * indicates the extension MAY be provided 
 ~~~
 {: #table:ephemeral title="Ephemeral Extension presence per LURK exchange" }
@@ -452,10 +455,10 @@ The extension data is defined as follows:
 
 ~~~
 
-enum { secret_provided(0), secret_generated(1) (255)};
+enum { secret_provided(0), secret_generated(1) (255)} EphemeralMethod;
 
 EphemeralData{
-    uint8 method
+    EphemeralMethod method
     opaque secret<0..2^16> 
 }
 ~~~
@@ -469,10 +472,10 @@ The LURK client MUST provide this extension only when PSK or
 PSK-authentication is envisioned and when the PSK has not been provided
 earlier. These exchanges are early_secret on the TLS server. On the TLS
 client side, these exchanges are binder_key, early_secret and
-init_handshake_secret.    The LURK client MUST NOT provide this
-extension outside these exchanges. When receiving the PSK extension
-outside these messages, the Cryptographic Service MUST NOT proceed to
-the exchange and SHOULD return a invalid_format error.  
+init_handshake_secret. The LURK client MUST NOT provide this extension
+outside these exchanges. When receiving the PSK extension outside these
+messages, the CS MUST NOT proceed to the exchange and SHOULD return a
+invalid_format error.  
 
 ~~~
 +--------+--------------------------+----------+
@@ -507,7 +510,7 @@ When the psk extension is provided in LURK exchange that is not
 permitted an invalid_extension error SHOULD be returned. 
 
 Upon receiving this extension in the permitted LURK exchange the
-Cryptographic Service checks the PSK is available. In case the PSK is
+CS checks the PSK is available. In case the PSK is
 not available, an invalid_psk error is returned. If the PSK is not
 provided, a default PSK is generated as described in {{!RFC8446}}
 section 7.1. If the default PSK is not allowed then an invalid_psk is
@@ -519,7 +522,7 @@ The freshness_function provides perfect forward secrecy (PFS) and is
 used by the LURK client on the TLS client to generate the
 ClientHello.random or by the LURK client on the TLS server to generate
 the ServerHello.random. When these randoms are provided to the
-Cryptographic Service, the freshness_function MUST be provided as well.
+CS, the freshness_function MUST be provided as well.
 
 Table {{table:freshness}} lists the LURK exchange that MUST include the
 freshness function extension as well as those where the extension may be
@@ -551,11 +554,11 @@ M indicates the extension is mandatory
 The extension data is defined as follows:
 
 ~~~
-PFSAlgorithm freshness_funct;  // {{!I-D.mglt-lurk-tls12}} section 4.1
+FreshnessFunct freshness_funct;  // {{!I-D.mglt-lurk-tls12}} section 4.1
 ~~~
 
 
-If the Cryptographic Service does not support the freshness_funct, an
+If the CS does not support the freshness_funct, an
 invalid_freshness_funct error is returned.
 
 
@@ -589,103 +592,55 @@ not protected by PFS later exchanges are. On the TLS client side,
 binder_key does not have any Handshake Context so this exchange is not
 protected by PFS. Later exchanges are. 
 
-## Context Agreement Sub-Exchange {#sec:ctx_agreement}
 
-The LURK client and the Cryptographic Service perform an ordered
-sequence of LURK exchange in order to complete a TLS handshake. This
-suite of LURK exchange performed within a session identified by a
-session_id on both side. Each side uses a specific session_id used for
-inbound traffic. In addition, a cookie mechanism provides means to
-ensure that the suite of LURK messages come from the same LURK client.
+### Session ID Extension
 
-The management of this session is managed via a key schedule context
-(ks_ctx). This context contains the session_id used for inbound traffic,
-the session_id used for the outbound traffic as well as the necessary
-cryptographic material to generate the cookies (cookie_h).    
+A LURK client and the CS are likely to establish a LURK session. A
+session is mandatory to be set when a given TLS session requires
+multiple interactions between the Lurk client and the CS. Stateless
+interactions MAY be possible with ECDHE authentication without session
+resumption. Other configuration MAY also use other configurations to
+determine the session, such as a TCP session for example, in which case
+multiplexing LURK sessions over a common transport layer is not
+possible.  
 
-ContextAgreementRequest and ContextAgreementResponse are present in
-all LURK exchange initiating a session as represented in Table
-{{table:ctx_agreement}}. 
+The LURK client indicates its willing to set a session as well as the
+session ID that should be used by the CS by inserting a Session ID
+Extension. The LURK client MAY only insert the Extension in a LURK
+message that initiates a session. 
 
-The structure is represented below:
+Upon receiving the Session ID Extension in an unexpected message, the CS
+MUST return an invalid_extension error.  Upon receiving the Session ID
+Extension in an expected LURK message, The CS MAY ignored the received
+extension indicating thus to the LURK client that no session ID are
+needed. The LURK client MUST NOT insert a session ID in the following
+messages. If the CS agrees on setting a LURK session, the CS will return
+the Extension back with the expected Session ID use for the
+communication between the LURK client and the CS. When a session ID has
+been agreed all remaining exchange contain the session ID provided by
+the peer. 
 
-~~~
-struct {
-    PFSAlgorithm cookie_h; //{!I-D.mglt-lurk-tls12}} section 4.1
-    unint32 lurk_client_session_id;
-    unint32 lurk_client_cookie_init;
-} ContexAgreementRequest;
+The CS MAY require a session ID being agreed between the LURK client and
+the CS. When the LURK client does not include the Session ID Extension,
+the CS MUST respond with an invalid_session_id error. 
 
-struct {
-    uint32 crypto_service_session_id
-    uint32 crypto_service_cookie_init
-} ContextAgreementResponse
-~~~
+The policy to have session ID on LURK message is a policy that applies
+to the CS and LURK client cannot have different policies. When session
+ID are enabled, the CS expect every LURK message to have a session ID
+except for the initiating messages. 
 
-cookie_h:
-The hash function used to generate the cookies throughout the session. 
-
-lurk_client_session_id:
-the session_id used by the LURK client. Packets from the Cryptographic
-Service to the LURK client are expected to have this value as
-session_id. The session_id MUST be generated randomly for each session.
-
-lurk_client_cookie_init:
-A random value that characterizes the exchange and that is not visible in
-the next LURK exchange of the session.
-
-crypto_service_session_id:
-the session_id used by the Cryptographic Service. Packets from the LURK
-client to the Cryptographic Service are expected to have this value as
-session_id. The session_id MUST be generated randomly for each session. 
-
-crypto_service_cookie_init:
-A random value that characterizes the exchange and that is not visible in
-the next LURK exchange of the session.
-
-If the Cryptographic Service does not support cookie_h an
-invalid_cookie_h error is returned. Otherwise, the Cryptographic Service
-initiates a context (ks_ctx).  
-
-The cookie mechanism is intended to prevent an attacker to perform an
-exchange within a session established between the LURK client and the
-Cryptographic Service. Cookies are generated as represented below by the
-LURK client and the Cryptographic Service. The cookie MUST be checked
-against its expected value. When the Cryptographic Service does not
-receive the expected cookie, the request is discarded or an
-invalid_request error is sent.
-
-The cookie is represented below:
-
-~~~
-salt_0 = LURK exchange
-salt_n+1 = HKDF-Expand-Label(salt_n,
-                        label, "", cookie_h.length)
-cookie_n+1 = cookie_h(salt_n+1)[4]
-~~~
-
-salt_0 is initialized by the LURK exchange initiating the session, i.e
-the early_secret, the init_certificate_verify, binder_key or
-handshake_secret. Next saltz are derived iteratively and the
-corresponding cookie takes the 32 most significant bits of the
-resulting hash of the salt_n with cookie_h. The first cookie sent is
-sent for n=1. The label is set to "cs_cookie" for request sent to the
-Cryptographic Service. The resulting cookie is designated as
-crypto_service_cookie. The label is set to "clt_cookie" for responses
-sent to the LURK client. The resulting cookie is designated a
-lurk_client_cookie.   
 
 ~~~
 +--------+--------------------------+----------+
 |  Role  | LURK exchange            | Presence |
 +--------+--------------------------+----------+
-| server | early_secret             | M        |
-| server | init_certificate_verify  | M        |
+| server | early_secret             | *        |
+| server | init_certificate_verify  | *        |
 | server | handshake_and_app_secret | -        | 
 | server | new_session_ticket       | -        |
 | client | binder_key               | -        |
-| client | early_secret             | M        | 
-| client | init_handshake_secret    | M        |
+| client | early_secret             | *        | 
+| client | init_handshake_secret    | *        |
 | client | handshake_secret         |          |
 | client | app_secret               | -        | 
 | client | certificate_verify       | -        |
@@ -693,51 +648,79 @@ lurk_client_cookie.
 | client | post_handshake           | -        |
 +--------+--------------------------+----------+
 * indicates the extension MAY be provided 
-M indicates the extension is mandatory
-- indictaes the extension MUST NOT be provided
+- indicates the extension MUST NOT be provided
 ~~~
-{: #table:ctx_agreement title="Presence of the Context Agreement
-structure in the various LURK exchanges" }
+{: #table:ctx_agreement title="Presence of the Session ID Extension
+in the various LURK exchanges" }
 
+The extension data is defined as follows:
 
+~~~
+uint32 session_id
+~~~
+
+The session ID agreement leads to the definition of the following
+structure that will be embedded into any non initiating LURK exchange. 
+
+~~~
+struct{
+    select( session_id_agreed ){
+        case True:
+            unint32 session_id
+        case False:
+    }
+} SessionID
+
+~~~
+
+session_id_agreed:
+indicates the LURK client and the CS have agreed on using session ID as
+well as the respective session ID value to use. 
+
+session_id can take the following values:
+  1. session_id_cs: the session ID provided by the CS to the LURK client in the
+Session ID extension. This is the value the LURK client MUST use in any
+subsequent exchange. That value will be used by the CS to associate its
+internal context to the session. 
+  2. session_id_client: the session ID provided by the LURK client to the CS in
+the Session ID extension. This is the value the CS MUST use in any subsequent
+exchange.  That value will be used by the LURK client to associate its internal
+context to the session. 
+
+ 
 
 ## Signing Sub-Exchange {#sec:signing}
 
-The signature requires the signature scheme (sig_algo), the designated
-private key (key_id), as well as sufficient context to generate the
-necessary data to be signed. In our case the necessary context is
-provided by the LURKCertificate, assuming the Cryptographic Service will
-have the necessary Handshake Context. The latest may be provided in a
-combination of a secret request. 
+The signature requires the signature scheme (sig_algo), the designated private
+key (key_id), as well as sufficient context to generate the necessary data to
+be signed. In our case the necessary context is provided by the
+LURKCertificate, assuming the CS will have the necessary Handshake Context. The
+latest may be provided in a combination of a secret request. 
 
-key_id is processed as described in {{?I-D.mglt-lurk-tls12}} section
-4.1. If the Cryptographic Service does not support the KeyPairIdType an
-invalid_key_id_type is returned. If the Cryptographic Service does not
-recognize the key, an invalid_key_id error is returned.  
+key_id is processed as described in {{?I-D.mglt-lurk-tls12}} section 4.1. If
+the CS does not support the KeyPairIdType an invalid_key_id_type is returned.
+If the CS does not recognize the key, an invalid_key_id error is returned.  
 
 sig_algo designates the signature algorithm scheme, and it is defined in
-{{!RFC8446} section 4.2.3. When the Cryptographic Service does not
-support the signature scheme an invalid_signature_scheme error is
-returned. 
+{{!RFC8446} section 4.2.3. When the CS does not support the signature scheme an
+invalid_signature_scheme error is returned. 
 
-The certificate is a public data that may repeat over multiple distinct
-TLS handshakes. To limit the load of unnecessary information being
-transmitted multiple times, the LURKCertificate enables to carry the
-index of the Certificate structure rather than the structure itself.
-When the lurk_certificate_type is set to sha256_32, the index of the
-Certificate structure is sent. The current specification generates the
-index using sha256_32 as defined in {{?I-D.mglt-lurk-tls12}}, that is
-the first 32 bits of the hash of the Certificate structure using SHA256
-as the hashing function. When lurk_certificate_type is set to tls13 the
-Certificate structure is expected. When the Cryptographic Service does
-not support the certificate_type, an invalid_certificate_type error is
-returned. When the Certificate structure does not match the private key,
-an invalid_certificate error is returned. 
+The certificate is a public data that may repeat over multiple distinct TLS
+handshakes. To limit the load of unnecessary information being transmitted
+multiple times, the LURKCertificate enables to carry the index of the
+Certificate structure rather than the structure itself.  When the
+lurk_certificate_type is set to sha256_32, the index of the Certificate
+structure is sent. The current specification generates the index using
+sha256_32, that is the first 32 bits of the hash of the Certificate structure
+using SHA256 as the hashing function.  When lurk_certificate_type is set to
+X509 or RawPublicKey the full Certificate structure is expected. When the CS
+does not support the certificate_type, an invalid_certificate_type error is
+returned. When the Certificate structure does not match the private key, an
+invalid_certificate error is returned. 
 
-Signing operations are described in {{!RFC8446}} section 4.4.3. The
-context string is derived from the role and the type of the LURK
-exchange as described below. The Handshake Context is taken from the key
-schedule context.   
+Signing operations are described in {{!RFC8446}} section 4.4.3. The context
+string is derived from the role and the type of the LURK exchange as described
+below. The Handshake Context is taken from the key schedule context.   
 
 ~~~
 +--------+-------------------------+-------------------------------------+
@@ -748,26 +731,25 @@ schedule context.
 +--------+-------------------------+-------------------------------------+
 ~~~
 
-The Cryptographic Service computes the signature as described in
-{{!RFC8446}} section 4.4.3. and returns signature in SigningResponse.
-When the Cryptographic Service does not have the necessary Handshake
-Context, context or is unable to proceeds to the signing operation, an
-invalid_certificate_verify error is returned. 
+The CS computes the signature as described in {{!RFC8446}} section 4.4.3. and
+returns signature in SigningResponse.  When the CS does not have the necessary
+Handshake Context, context or is unable to proceeds to the signing operation,
+an invalid_certificate_verify error is returned. 
 
 The structure is represented below:
 
 ~~~
-enum { tls13(0), sha256_32(1) (255)}; LURKCertificateType
+enum { X509(0), RawPublicKey(1), sha256_32(128) (255)}; LURK13CertificateType
 
 struct {
-    lurk_certificate_type;
+    LURK13CertificateType certificate_type;
     select (lurk_certificate_type) {
         case sha256_32:
             uint32 hash_cert;
-        case tls13:
-            Certificate tls13_certificate; // RFC8446 section 4.4.2
+        case X509, RawPublicKey:
+            Certificate certificate; // RFC8446 section 4.4.2
     };
-} LURKCertificate;
+} LURK13Certificate;
 
 struct {
     KeyPairId key_id; // draft-mglt-lurk-tls12 section 4.1
@@ -795,7 +777,7 @@ authentication via the pre_shared_key and psk_key_exchange_modes
 extensions. Depending on its policies, the TLS server MAY decide to
 proceed to such authentication. It chooses a PSK identity so the LURK
 client initiates a key schedule context (ks_ctx) that will manage the
-session with the Cryptographic Service. This session is initiated with a
+session with the CS. This session is initiated with a
 early_secret exchange. 
 
 The binder_key MUST be requested, since it is used to validate the PSK. 
@@ -807,46 +789,36 @@ accept early data and request the client_early_traffic_secret.
 The TLS server MAY have specific policies and request
 early_exporter_master_secret.
 
-Upon receiving an early_secret request, the Cryptographic Service
-proceeds the ContextAgreementRequest as described in
-{{sec:ctx_agreement}} as well as the SecretRequest as described in
-section {{sec:secret}}.
+Upon receiving an early_secret request, the CS proceeds the
+SecretRequest as described in section {{sec:secret}}.
 
-The Cryptographic Service MUST check pre_shared_key and
+The CS MUST check pre_shared_key and
 psk_key_exchange_modes extensions are present in the ClientHello. If
 these extensions are not present, a invalid_handshake error SHOULD be
 returned. 
-The Cryptographic Service MUST ignore the client_early_traffic_secret if
+
+The CS MUST ignore the client_early_traffic_secret if
 early_data extension is not found in the ClientHello. The Cryptographic
 Service MAY ignore the request for client_early_traffic_secret, in any
-case. The Cryptographic Service MAY ignored the request for
+case. The CS MAY ignored the request for
 early_exporter_master_secret.
 
 ~~~
 struct{
-    ContextAgreementRequest ctx_request
     SecretRequest secret_request
 } EarlySecretRequest
 
 
 
 struct{
-    ContextAgreementResponse ctx_response
     SecretResponse secret_response
 } EarlySecretResponse
 
 ~~~
 
-ctx_request:
-The structure associated to the context agreement request defined in
-section {{sec:ctx_agreement}}
 
 secret_request:
 The structure associated to the secret request defined in section {{sec:secret}} 
-
-ctx_response:
-The structure associated to the context agreement response defined in
-section {{sec:ctx_agreement}}
 
 secret_response:
 The structure associated to the secret request defined in section
@@ -859,7 +831,7 @@ A TLS server MAY receive a ClientHello that proposes ECDHE
 authentication with a key_share extension. Depending on its policies,
 the TLS server MAY decide to proceed to such authentication and indicate
 it to the LURK client so it initiates a key schedule context (ks_ctx)
-that will manage the session with the Cryptographic Service. This
+that will manage the session with the CS. This
 session is initiated with a init_certificate_verify exchange. 
 
 The Cryptographic MUST ensure the ServerHello has selected the ECDHE
@@ -868,7 +840,7 @@ pre_shared_key extension is present. If these conditions are not met, a
 invalid_handshake error SHOULD be returned. 
 
 In order to provide generate the client_application_traffic_secret_0 and
-server_application_traffic_secret_0, the Cryptographic Service generates
+server_application_traffic_secret_0, the CS generates
 the server Finished. This value is computed to avoid multiple round
 trips. This value is not returned to the LURK client and needs to be
 computed again by the TLS server. 
@@ -876,39 +848,24 @@ computed again by the TLS server.
 After the exchange is completed, the TLS server is able to build and
 return the ServeHello and complete the TLS handshake.
 
-If the Cryptographic Service has been configured not to handle session
-resumption. The session is finished and ks_ctx SHOULD be deleted and
-some implementations MAY NOT create the ks_ctx. While the ctx_request
-and ctx_responses MAY be ignored, their associated overhead is limited
-and for sake of simplicity, we did not consider creating a different
-LURK exchange. 
+If the CS has been configured not to handle session resumption. The session is
+finished and ks_ctx SHOULD be deleted and some implementations MAY NOT create
+the ks_ctx. 
 
 ~~~
-
 struct{
     SecretRequest secret_request
     SigingRequest signing_request    
-}CertificateVerifyRequest
-
-
-struct{
-    ContextAgreementRequest ctx_request
-    CertificateVerifyRequest cert_request
 }InitCertificateVerifyRequest
 
 struct{
     SecretResponse secret_response
-    SigningResponse signing_response
-}CertificateVerifyResponse
-
-struct{
-    ContextAgreementResponse ctx_response
-    CertificateVerifyRequest cert_response
+    SigingResponse signing_response   
 }InitCertificateVerifyResponse
+
 ~~~
 
-ctx_request, ctx_response, secret_request and secret_response are
-defined in section {{sec:early_secret}}.
+secret_request and secret_response are defined in section {{sec:early_secret}}.
 
 ## handshake_and_app_secret {#sec:handshake_and_app_secret}
 
@@ -924,42 +881,27 @@ the ServerHello. In addition, the selected identity MUST be the one
 provided in the psk extension of the previous early_secret exchange.
 
 The LURK client MAY request the exporter_master_secret depending on its
-policies. The Cryptographic Service MAY ignore the request based on its
+policies. The CS MAY ignore the request based on its
 policies. 
 
 Similarly to the init_certificate_verify, if session resumption is not
-provided by the Cryptographic Service, the LURK session ends after this
-exchange and ks_ctx SHOULD be removed. 
+provided by the CS, the LURK session ends after this exchange and ks_ctx
+SHOULD be removed. 
 
 ~~~
 struct{
-    uint32 crypto_service_session_id
-    uint32 crypto_service_cookie
+    SessionID session_id_cs
     SecretRequest secret_request
 } HandshakeRequest
 
 
 
 struct{
-    uint32 lurk_client_session_id
-    uint32 lurk_client_cookie
+    SessionID session_id_client
     SecretResponse secret_response
 } HandshakeResponse
 
 ~~~
-crypto_service_session_id:
-value provided in the ContexAgreementResponse - see section
-{{sec:ctx_agreement}}.
-
-crypto_service_cookie:
-cookie value generated as described in section {{sec:ctx_agreement}}.
-
-lurk_client_session_id:
-value provided in the ContexAgreementRequest - see section
-{{sec:ctx_agreement}}.
-
-lurk_client_cookie:
-cookie value generated as described in section {{sec:ctx_agreement}}.
 
 ## new_session_tickets 
 
@@ -967,26 +909,25 @@ new_session ticket handles session resumption. It enables to retrieve
 NewSessionTickets that will be forwarded to the TLS client by the TLS
 server to be used later when session resumption is used. It also
 provides the ability to delegate the session resumption authentication
-from the Cryptographic Service to the TLS server. In fact, if the LURK
+from the CS to the TLS server. In fact, if the LURK
 client requests and receives the resumption_master_secret it is able to
 emit on its own NewSessionTicket. As a result new_session_ticket LURK
 exchanges are only initiated if the TLS server expects to perform
-session resumption and the Cryptographic Service responds only if if
+session resumption and the CS responds only if if
 session_resumption is enabled. If session resumption is not enabled, the
 Cryptographic MAY have ended the LURK session and the new_session_ticket
 will be ignored or responded with a invalid_request error. 
 
-The Cryptographic Service MAY responds with a resumption_master_secret
+The CS MAY responds with a resumption_master_secret
 based on its policies. 
 
 The LURK client MAY perform multiple new_session_ticket exchanges before
-the session between the LURK client and the Cryptographic Service is in
+the session between the LURK client and the CS is in
 a finished state with ks_ctx deleted. 
 
 ~~~
 struct {
-    uint32 crypto_service_session_id
-    uint32 crypto_service_cookie
+    SessionID session_id_cs
     uint8 ticket_nbr;
     unint16 key_request;
     Handshake handshake_context<0..2^32> //RFC8446 section 4.
@@ -994,8 +935,7 @@ struct {
 
 
 struct {
-    uint32 lurk_client_session_id
-    uint32 lurk_client_cookie
+    SessionID session_id_client
     NewSessionTicket ticket_list<0..2^16-1>; //RFC8446 section 4.6.1.
 } NewSessionTicketResponse;
 ~~~
@@ -1007,7 +947,7 @@ lurk_client_session_id, and lurk_client_cookie are defined in section
 
 ticket_nbr:
 designates the requested number of NewSessionTicket. In the case of
-delegation this number MAY be set to zero. The Cryptographic Service MAY
+delegation this number MAY be set to zero. The CS MAY
 responds with less tickets when the value is too high.
 
 # LURK exchange on the TLS client
@@ -1044,7 +984,7 @@ the TLS client. The early_secret will only be performed in the case of
 The handshake_secret is performed after an early_secret LURK exchange.
 This exchange is performed in the case of an PSK or PSK-ECDHE
 authentication and coherence with the Handshake Context MUST be checked
-by the LURK client as well as by the Cryptographic Service as described
+by the LURK client as well as by the CS as described
 in {{sec:early_secret}} and section {{sec:handshake_and_app_secret}}. 
 
 The structures of the handshake_secret follow those of the
@@ -1054,13 +994,13 @@ handshake_and_app_secret described in section
 ## init_handshake_secret 
 
 The handshake_secret LURK exchange MAY be initiating a session between
-the LURK client and the Cryptographic Service in which case it contains
+the LURK client and the CS in which case it contains
 a ctx_agreement structures. 
 
 Coherence between with the Handshake Context and the authentication
 ECDHE versus PSK or PSK-ECDHE) is performed as described in section
 {{sec:early_secret}} and section {{sec:handshake_and_app_secret}}.  The
-LURK client and the Cryptographic Service MUST ensure such coherence.
+LURK client and the CS MUST ensure such coherence.
 A Signing sub exchange MUST only be performed when ECDHE authentication
 has been selected which is determined by the presence of a key_share
 extension as well as the absence of a pre_shared_key extension in the
@@ -1071,7 +1011,6 @@ server_handshake_traffic_secret_0 secrets MAY be requested.
 
 ~~~
 struct{
-    ContextAgreementRequest ctx_request
     SecretRequest secret_request
     select (handshake_context.ecdhe_selected){
         case :
@@ -1081,7 +1020,6 @@ struct{
 
 
 struct{
-    ContextAgreementResponse ctx_response
     SecretResponse secret_response
     select (handshake_context.ecdhe_selected){
         case :
@@ -1097,7 +1035,7 @@ struct{
 The app_secret LURK exchange is performed when no TLS client
 authentication has been requested, i.e. CertificateRequest message is
 not provided in the flight of the ServerHello. The LURK client and the
-Cryptographic Service MUST ensure no CertificateRequest is present in
+CS MUST ensure no CertificateRequest is present in
 the Handshake Context.
 
 Only the client_application_traffic_secret_0 and
@@ -1115,7 +1053,7 @@ post_handshake_auth extension.
 
 The certificate_verify LURK exchange is performed when TLS client
 authentication has been requested by the TLS server. When performed, the
-LURK client and the Cryptographic Service MUST check the presence of a
+LURK client and the CS MUST check the presence of a
 CertificateRequest structure in the Handshake Context. When not present,
 a invalid_handshake error SHOULD be returned. 
 
@@ -1126,6 +1064,18 @@ post_handshake_auth extension.
 
 The CertificateVerifyRequest and CertificateVerifyResponse structures
 are used for this LURK exchange. 
+
+~~~
+struct{
+    SessionID session_id_cs
+    InitCertificateVerifyRequest cert_request
+}CertificateVerifyRequest
+
+struct{
+    SessionID session_id_client
+    InitCertificateVerifyRequest cert_response
+}CertificateVerifyResponse
+~~~
 
 ## register_session_tickets
 
@@ -1138,11 +1088,11 @@ provide one or multiple NewSessionTickets. These tickets will be
 helpful for the session resumption to bind the PSK value to some
 identities. Third, the LURK client MAY retrieve the
 resumption_master_secret when session resumption is being delegated by
-the Cryptographic Service to the TLS client.  
+the CS to the TLS client.  
 
 The first register_session_ticket MUST carry the TLS handshake and future
 register_session_ticket LURK exchange MUST have a handshake_context of zero
-length. If these conditions are not met, the Cryptographic Service
+length. If these conditions are not met, the CS
 SHOULD return a invalid_handshake error. 
 
 The first register_session_ticket MAY request the session_resumption_master.
@@ -1155,16 +1105,14 @@ NewSessionTickets.
 
 ~~~
 struct {
-    uint32 crypto_service_session_id
-    uint32 crypto_service_cookie
+    SessionID session_id_cs
     Handshake handshake_context<0..2^32>;     //RFC8446 section 4.
     NewSessionTicket ticket_list<0..2^16-1>; //RFC8446 section 4.6.1.
     uint16 key_request;
 } RegisterSessionTicketRequest;
 
 struct {
-    uint32 lurk_client_session_id
-    uint32 lurk_client_cookie
+    SessionID session_id_client
 } RegisterSessionTicketResponse;
 
 ~~~
@@ -1182,20 +1130,18 @@ The post_handshake LURK exchange is performed in order to the client to
 authenticate after the TLS handshake has complete. The TLS client MUST
 NOT proceed to this exchange if post handshake support has not been
 announced in the ClientHello with the post_handshake_auth extension.
-When such extension is not found the Cryptographic Service MUST return a
+When such extension is not found the CS MUST return a
 invalid_handshake error.   
 
 ~~~
 struct {
-    uint32 crypto_service_session_id
-    uint32 crypto_service_cookie
+    SessionID session_id_cs
     Handshake handshake_context<0..2^32>;     //RFC8446 section 4.
     int16 app_n;
 } PostHandshakeRequest;
 
 struct {
-    uint32 lurk_client_session_id
-    uint32 lurk_client_cookie
+    SessionID session_id_client
 } PostHandshakeResponse;
 ~~~
 
@@ -1213,7 +1159,7 @@ CertificateVerify when ECDHE authentication is performed as well as the
 PSK when PSK or PSK-ECDHE authentication is used. 
 
 The protection of these credentials means that someone gaining access to
-the Cryptographic Service MUST NOT be able to use that access from
+the CS MUST NOT be able to use that access from
 anything else than the authentication of an TLS being established. In
 other way, it MUST NOT leverage this for:
 * any operations outside the scope of TLS session establishment.
@@ -1221,7 +1167,7 @@ other way, it MUST NOT leverage this for:
 * any operations on future TLS sessions
 * any operations on establishing TLS sessions by another LURK client.
 
-The Cryptographic Service outputs are limited to secrets as well as
+The CS outputs are limited to secrets as well as
 NewSessionTickets. The design of TLS 1.3 make these output of limited
 use outside the scope of TLS 1.3. Signature are signing data specific to
 TLS 1.3 that makes the signature facility of limited interest outside
@@ -1241,7 +1187,7 @@ future session based on what it learns from a current session. ECDHE
 authentication relies on cryptographic signature and an ongoing TLS
 handshake. The robustness of the signature depends on the signature
 scheme and the unpredictability of the TLS Handshake. PSK authentication
-relies on not revealing the PSK. The Cryptographic Service does not
+relies on not revealing the PSK. The CS does not
 reveal the PSK. TLS 1.3 has been designed so secrets generated do not
 disclose the PSK as a result, secrets provided by the Cryptographic do
 not reveal the PSK. NewSessionTicket reveals the identity (ticket) of a PSK.
@@ -1250,18 +1196,18 @@ bound to the knowledge of the PSK. The Cryptographic does not output any
 material that could help generate a PSK - the PSK itself or the
 resumption_master_secret. In addition, the Cryptographic only generates
 NewSessionTickets for the LURK client that initiates the key schedule
-with Cryptographic Service with a specific way to generate ctx_id. This
+with CS with a specific way to generate ctx_id. This
 prevents the leak of NewSessionTickets to an attacker gaining access to
-a given Cryptographic Service. 
+a given CS. 
 
 If an the attacker get the NewSessionTicket, as well as access to the
-Cryptographic Service of the TLS client it will be possible to proceed
+CS of the TLS client it will be possible to proceed
 to the establishment of a TLS session based on the PSK. In this case,
-the Cryptographic Service cannot make the distinction between the
+the CS cannot make the distinction between the
 legitimate TLS client and teh attacker.  This corresponds to the case
 where the TLS client is corrupted. 
 
-Note that when access to the Cryptographic Service on the TLS server
+Note that when access to the CS on the TLS server
 side, a similar attack may be performed. However the limitation to a
 single re-use of the NewSessionTicket prevents the TLS server to proceed
 to the authentication.  
@@ -1269,7 +1215,7 @@ to the authentication.
 Attacks related to other TLS sessions are hard by design of TLS 1.3
 that ensure a close binding between the TLS Handshake and the generated
 secrets. In addition communications between the LURK client and the
-Cryptographic Service cannot be derived from an observed TLS handshake
+CS cannot be derived from an observed TLS handshake
 (freshness function). This makes attacks on other TLS sessions unlikely. 
 
 # IANA Considerations
@@ -1286,12 +1232,12 @@ The state diagram sums up the LURK exchanges. The notations used are
 defined below:
 
 LURK exchange indicates a LURK exchange is stated by the LURK client or
-is received by the Cryptographic Service ----> (resp. <----) indicates a
+is received by the CS ----> (resp. <----) indicates a
 TLS message is received (resp. received). These indication are
 informative to illustrates the TLS state machine. 
 
 CAPITAL LETTER indicates potential configuration parameters or policy
-applied by the LURK client or the Cryptographic Service. The following
+applied by the LURK client or the CS. The following
 have been considered:
 
 * PSK, PSK-ECDHE, ECDHE that designates the authentication method. This
@@ -1299,20 +1245,20 @@ choice is made by the LURK client. The choice is expressed by a specific
 LURK exchange as well as from the TLS Handshake Context.
 
 * SESSION_RESUMPTION indicates the session resumption has been enabled
-on the LURK client or the Cryptographic Service. As a consequence the
+on the LURK client or the CS. As a consequence the
 TLS client is considered performing session resumption and the TLS
 server MUST make session resumption possible. 
 
 * POST_HANDSHAKE_AUTH indicates that post handshake authentication
 proposed by the TLS client in a post_handshake_auth extension is not
-ignored by the LURK client or on the Cryptographic Service. 
+ignored by the LURK client or on the CS. 
 
 Note that SESSION_RESUMPTION, POST_HANDSAHKE_AUTH are mostly informative
 and the current specification does not mandate to have such
 configuration parameters. By default, these SHOULD be enabled. 
 
 Other potential configuration could be proposed for configuring LURK
-client or Cryptographic Service policies. These have not been
+client or CS policies. These have not been
 represented in the state diagram and the specification does not mandate
 to have these parameters implemented.  
 
@@ -1322,25 +1268,25 @@ ClientHello via the early_data extension MUST be considered.
 
 * EARLY_EXPORTER_MASTER_SECRET indicates whether or not
 early_exporter_master_secret MUST be requested by the LURK client and
-responded by the Cryptographic Service. 
+responded by the CS. 
 
 * MASTER_EXPORTER  indicates whether or not
 exporter_master_secret MUST be requested by the LURK client and
-responded by the Cryptographic Service. 
+responded by the CS. 
 
 * SESSION_RESUMPTION_DELEGATION indicates whether or not
 session_resumption_master is requested by the LURK client and responded
-by the Cryptographic Service. 
+by the CS. 
 
 * MAX_SESSION_TICKET_NBR indicates the maximum number of tickers that
 can be requested or provided by the LURK client and provided by the
-Cryptographic Service. It is strongly RECOMMENDED to have such
+CS. It is strongly RECOMMENDED to have such
 limitations being configurable.  
 
 
 The analysis of the TLS Handshake Context enables to set some variables
 that can be used by the LURK client to determine which LURK exchange to
-proceed as well as by the Cryptographic Service to determine which
+proceed as well as by the CS to determine which
 secret MAY be responded. The following variables used are:
 
 psk_proposed:
@@ -1366,10 +1312,10 @@ indicated by the presence of a post_handshake_auth extension in the
 ClientHello.
 
 finished:
-indicates that the LURK client or the Cryptographic Service has
+indicates that the LURK client or the CS has
 determined the session shoudl be closed an ks_ctx are deleted.
 
-The Cryptographic Service contains three databases:
+The CS contains three databases:
 
 CTX_ID_DB:
 database that contains the valid ctx_id of type opaque.
@@ -1577,7 +1523,7 @@ configurations.
 The TLS client may propose multiple ways to authenticate the
 server (ECDHE, PSK or PSK-ECDHE). The TLS server may chose one of those,
 and this choice is reflected by the LURK client on the TLS server. In
-other words, this decision is out of scope of the Cryptographic Service. 
+other words, this decision is out of scope of the CS. 
 
 The derivation of the secrets is detailed in {{!RFC8446)) section 7.1.
 Secrets are derived using Transcript-Hash and HKDF, PSK and ECDHE
@@ -1608,7 +1554,7 @@ counter part public key in the key_share extension. When the LURK client
 is on the TLS client, the public key is provided in the ServerHello.
 When the LURK client is on the TLS Server, the public key is provided in
 the ClientHello. When ECDHE secret is needed, ClientHello...ServerHello
-is always provided to the Cryptographic Service.    
+is always provided to the CS.    
 
 Handshake Context:
 is a subset of Handshake messages that are necessary to generated the
@@ -1631,10 +1577,10 @@ requested secrets. The various Handshake Contexts are summarized below:
 ~~~
 
 
-The Cryptographic Service has always the Hash function, the PSK and
+The CS has always the Hash function, the PSK and
 ECDHE secrets and the only remaining parameter is the Handshake Context.
 The remaining sections will only focus on checking the Handshake Context
-available to the Cryptographic Service is sufficient to perform the key
+available to the CS is sufficient to perform the key
 schedule.  
 
 When ECDHE authentication is selected both for the TLS server or the TLS
@@ -1665,7 +1611,7 @@ The values for the Handshake Context are represented below:
 +-----------+-------------------------+-----------------------------+
 ~~~
 
-When ECDHE authentication is selected, the Cryptographic Service
+When ECDHE authentication is selected, the CS
 generates a Finished message, which is a MAC over the value
 Transcript-Hash(Handshake Context, Certificate, CertificateVerify) using
 a MAC key derived from the Base Key. As a result, the same Base Key and
@@ -1726,14 +1672,12 @@ generation of the signature (certificate_verify) carried by the
 CertificateVerify TLS structure. 
 
 The init_certificate_verify request uses a InitCertificateVerifyRequest
-structure which is composed of three substructures: a
-ContextAgreementRequest structure (ctx_request) that is in charge of
-setting up the LURK session. The parameters associated to the LURK
-session are designated as context. A SecretRequest structure
-(secret_request) is in charge of requesting the necessary secrets to
-decrypt and encrypt the TLS handshake as well as the applications
-carried over the TLS session. Finally a SigningRequest substructure
-(signing_request) is used to request the certificate_verify payload. 
+structure which is composed of two substructures: A SecretRequest
+structure (secret_request) is in charge of requesting the necessary
+secrets to decrypt and encrypt the TLS handshake as well as the
+applications carried over the TLS session. Finally a SigningRequest
+substructure (signing_request) is used to request the certificate_verify
+payload. 
 
 The secret_request carries the requested secrets as well as the
 necessary parameters to generate the secrets. In our case, the requested
@@ -1746,8 +1690,8 @@ ClientHello ... EncryptedExtensions. The ECDHE shared secret is provided
 in this example via the ephemeral extension. In our case, the secret key
 is provided directly thought other means may be used. In particularly
 providing the secret key implies the dhe parameters have been generated
-outside the Cryptographic Service. The freshness
-function is provided through the freshness extension.  
+outside the CS. The freshness function is provided through the freshness
+extension.  
 
 The signing_request provides the key_id that identifies the private key
 used to generate the signature, the algorithm use dto generate the
@@ -1757,49 +1701,50 @@ and may not be the complete certificate chain but only an index.
 
 ~~~
 TLS Server                      
-Lurk Client                              Cryptographic Service
+Lurk Client                              CS
         InitCertificateVerifyRequest
-          ctx_request
           secret_request
             key_request = h_c, h_s, a_c, a_s
             handshake_context = ClientHello ... EncryptedExtensions
             ext
               ephemeral = dhe_secret
               freshness
+              session_id
           signing_request
             key_id, 
             sig_algo 
             certificate
                                   -------->
                                          InitCertificateVerifyResponse
-                                           ctx_response
                                            secret_response
-                                             keys 
+                                             keys
+                                             ext
+                                               session_id 
                                            signing_response
                                              certificate_verify
                                    <--------- 
 ~~~
 
-Upon receiving the InitCertificateRequest, the Cryptographic Service
-initiates a context associated to the newly created LURK session. 
+Upon receiving the InitCertificateRequest, the CS initiates a context
+associated to the newly created LURK session. 
 
 The secrets are generated from the TLS 1.3 key schedule describe din
 {{!RFC8446}} and requires as input PSK, ECDHE as well as some context
 handshake. 
 
-The Cryptographic Service determine that ECDHE without specific PSK is
-used from the ClientHello and associated extensions. As a result, the
-default PSK value is used. The ECDHE share secret is derived, in our
-case from the dhe_secret of the TLS server and the public dhe value
-provided by the ClientHello shared_key extension. 
+The CS determine that ECDHE without specific PSK is used from the
+ClientHello and associated extensions. As a result, the default PSK
+value is used. The ECDHE share secret is derived, in our case from the
+dhe_secret of the TLS server and the public dhe value provided by the
+ClientHello shared_key extension. 
 
-The Cryptographic Service reads the freshness extension and generates
-the handshake_context that will be used further.   
+The CS reads the freshness extension and generates the handshake_context
+that will be used further.   
 
 The necessary Handshake Context to generate the handshake secrets is
 ClientHello...ServerHello  which is provided by the handshake_context.
-The Cryptographic Service uses the freshness function provided in the
-freshness extension to  
+The CS uses the freshness function provided in the freshness extension
+to derive the appropriated server.random.   
 
 The generation of the CertificateVerify is described in {{!RFC8446}}
 section 4.4.3. and consists in a signature over a context that includes
@@ -1822,9 +1767,8 @@ application secrets.
 
 The LURK server returns the requested keys, the certificate_verify in a
 InitCertificateVerifyResponse structure. This structure is composed of
-the three substructures ContextAgreementResponse (ctx_response),
-SecretResponse that contains the secrets and SigningResponse that
-contains the certificate_verify. 
+the two substructures: SecretResponse that contains the secrets and
+SigningResponse that contains the certificate_verify. 
 
 The TLS server can complete the ServerHello response, that is proceed to
 the encryption and generates the Finished message.   
@@ -1853,9 +1797,7 @@ To retrieves these secrets, the TLS client proceeds successively to an
 init_handshake_secret LURK exchange followed by a app_secret LURK
 exchange. 
 
-The init_handshake_secret exchange is composed of two substructures. The
-ContextAgreement  (ctx_request) to set a LURK session between the
-TLS client and the Cryptographic Service and a SecretRequest
+The init_handshake_secret exchange is composed of one substructure:
 (secret_request) to request the secrets. Optionally, a SigningRequest
 (signing_request) when the TLS server requests the TLS client to
 authenticate itself. The indication of a request for TLS client
@@ -1869,13 +1811,13 @@ In our case only the handshake secrets are requested (h_c, h_s). In this
 example the ECDHE share secret is provided via the ephemeral extension.
 In this case the ECDHE secrets have been generated by the TLS client,
 and the TLS client chooses to provide the ephemeral secret (dhe_secret)
-to the Cryptographic Service via the ephemeral extension. The TLS client
+to the CS via the ephemeral extension. The TLS client
 also provides the freshness function via the freshness extension so the
 handshake_context can be appropriately be interpreted. The handshake
 context is provided via the handshake_context and is set to ClientHello
 ... ServerHello. 
 
-Note that if the TLS client would have like the Cryptographic Service to
+Note that if the TLS client would have like the CS to
 generate the ECDHE public and private keys, the generation of the keys
 would have been made before the ClientHello is sent, that is in our case
 during a early_secret LURK exchange. If that had been the case a
@@ -1886,18 +1828,19 @@ init_handshake_secret exchange.
 TLS Client                      
 Lurk Client                              Cryptographic Service
         InitHandshakeSecretRequest
-          ctx_request
           secret_request
             key_request = h_c, h_s
             handshake_context = ClientHello ... ServerHello
             ext
               ephemeral = dhe_secret
               freshness
+              session_id
             ------->
 
                                   InitHandshakeSecretResponse
-                                    ctx_response
                                     secret_response
+                                    ext
+                                        session_id
                            <--------  keys
 TLS Client                      
 Lurk Client                              Cryptographic Service
@@ -1920,17 +1863,17 @@ Upon receiving the InitHandshakeSecretRequest, the servers initiates a
 LURK session context (ks_ctx) and initiates a key schedule. The key
 schedule requires PSK, ECDHE as well as Handshake Context to be
 complete. As no pre_shared_key and psk_key exchange_modes are found in
-the ClientHello the Cryptographic Service determines that ECDHE is used
-for the authentication. The PSK is set to its default value. The ECHDE
-shared secret is generated from the ephemeral extension as well as the
-public value provided in the ClientHello. The Cryptographic Service
-takes the freshness function and generates the appropriated handshake
-context. The necessary Handshake Context to generate handshake secrets
-is ClientHello...ServerHello which is provided by the handshake_context. 
+the ClientHello the CS determines that ECDHE is used for the
+authentication. The PSK is set to its default value. The ECHDE shared
+secret is generated from the ephemeral extension as well as the public
+value provided in the ClientHello. The CS takes the freshness function
+and generates the appropriated handshake context. The necessary
+Handshake Context to generate handshake secrets is
+ClientHello...ServerHello which is provided by the handshake_context. 
 
 The handshake secrets are returned in the secret_response to the TLS
-client.  The TLS client decrypt the encrypted extensions and messages
-of the ServerHello exchange. 
+client.  The TLS client decrypt the encrypted extensions and messages of
+the ServerHello exchange. 
 
 As no CertificateREquest appears, the LURK client initiates an
 app_secret LURK exchange decrypt and encrypt application data while
@@ -1940,16 +1883,15 @@ The AppSecretRequest structure uses session_id and cookies as agreed in
 the previous init_handshake_secret exchange. The AppSecretRequest embeds
 a SecretRequest sub structure. The application secrets requested are
 indicated by the key_request (a_s, a_s). The Handshake Context
-(handshake_context) is set to server EncryptedExtensions ...
-server Finished.   
+(handshake_context) is set to server EncryptedExtensions ...  server
+Finished.   
 
-Upon receiving the AppSecretRequest, the Cryptographic Service checks
-the session_id and cookies. The Cryptographic Service has now the
-ClientHello ... server Finished which enables it to compute the
-application secrets. 
+Upon receiving the AppSecretRequest, the CS checks the session_id. The
+CS has now the ClientHello ... server Finished which enables it to
+compute the application secrets. 
 
-As no session resumption is provided, the Cryptographic Service and the
-LURK client goes into a finished state and delete their ks_ctx. 
+As no session resumption is provided, the CS and the LURK client goes
+into a finished state and delete their ks_ctx. 
 
 ## TLS 1.3 Handshake with session resumption {#sec:ecdhe_resumption}
 
@@ -2009,13 +1951,13 @@ TLS Client                                   TLS Server
 
 The LURK client and  LURK server on the TLS server does not go into a
 finished state. Instead, the LURK client continues the LURK session with
-a NewSessionTicketRequest to enable the Cryptographic Service to
-generate the resumption_master_secret necessary to generate the PSK and
-generate a NewTicketSession. ctx_id is of type opaque, ticket_nbr
-indicate sthe number of NewSessionTickets and handshake_context is set
-to earlier of client Certificate client CertificateVerify ... client
-Finished. As we do not consider TLS client authentication, the
-handshake_context is set to client Finished as represented below. 
+a NewSessionTicketRequest to enable the CS to generate the
+resumption_master_secret necessary to generate the PSK and generate a
+NewTicketSession. ticket_nbr indicates the number of NewSessionTickets
+and handshake_context is set to earlier of client Certificate client
+CertificateVerify ... client Finished. As we do not consider TLS client
+authentication, the handshake_context is set to client Finished as
+represented below. 
 
 ~~~
 TLS Server                      
@@ -2034,7 +1976,7 @@ Lurk Client                              Cryptographic Service
 The necessary Handshake Context to generate the resumption_master_secret
 is ClientHello...client Finished. From the InitCerificateVerify the
 context_handshake was set to ClientHello...server Finished. The
-additional handshake_context enables the Cryptographic Service to
+additional handshake_context enables the CS to
 generate the NewSessionTickets.  
 
 Note that the LURK client on the TLS server may send multiple
@@ -2046,18 +1988,18 @@ session_id and cookie. It then generates the resumption_master_secret,
 NewSessionTickets. NewSessionTickets are stored into the PSK_DB under
 NewSessionTicket.ticket. Note that PSK is associated with the
 authentication mode as well as the Hash function negotiated for the
-cipher suite. The Cryptographic Service responds with
-NewSessionTickets that are then transmitted back to the TLS client. The
-TLS server is ready for session resumption. 
+cipher suite. The CS responds with NewSessionTickets that are then
+transmitted back to the TLS client. The TLS server is ready for session
+resumption. 
 
 ### TLS client: NewSessionTicket 
 
 Similarly, the LURK client on the TLS client will have to provide
-sufficient information to the Cryptographic Service the necessary PSK
-can be generated in case of session resumption. This includes the
-remaining Handshake Context to generate the resumption_master_secret as
-well as NewSessionTickets provided by the TLS server. The LURK client
-uses the register_session_ticket exchange. 
+sufficient information to the CS the necessary PSK can be generated in
+case of session resumption. This includes the remaining Handshake
+Context to generate the resumption_master_secret as well as
+NewSessionTickets provided by the TLS server. The LURK client uses the
+register_session_ticket exchange. 
 
 
 Note that the LURK client may provide the handshake_context with an
@@ -2081,11 +2023,11 @@ Lurk Client                              Cryptographic Service
 
 
 Both TLS client and TLS Servers are ready for further session
-resumption. On both side the Cryptographic Service stores the PSK in a
-database designated as PSK_DB. Each PSK is associated to a Hash function
-as well as authentication modes. Each PSK is designated by an identity.
-The identity may be a label, but in our case the identity is derived
-from the NewSessionTicket.ticket.    
+resumption. On both side the CS stores the PSK in a database designated
+as PSK_DB. Each PSK is associated to a Hash function as well as
+authentication modes. Each PSK is designated by an identity.  The
+identity may be a label, but in our case the identity is derived from
+the NewSessionTicket.ticket.    
 
 ### Session Resumption {#sec:session-resumption}
 
@@ -2127,7 +2069,7 @@ that PSK-ECDHE has been selected.
 
 To compute binders, the TLS Client needs to request the binder_key
 associated to each proposed PSK. These binder_keys are retrieved to the
-Cryptographic Service using the BinderKeyRequest. The key_request is set
+CS using the BinderKeyRequest. The key_request is set
 to binder_key, and the PSK_id extension indicates the PSK's identity
 (PSKIdentity.identity or NewSessionTicket.ticket). No Handsahke Context
 is needed and handshake_context is empty.  
@@ -2144,7 +2086,7 @@ Lurk Client                              Cryptographic Service
                               <---------   key
 ~~~
 
-Upon receiving the BinderKeyRequest, the Cryptographic Service checks
+Upon receiving the BinderKeyRequest, the CS checks
 the psk is in the PSK_DB and returns the binder_key. 
 
 With the binder keys, the TLS Client is able to send it ClientHello
@@ -2164,52 +2106,51 @@ single LURK session.
 
 The binder_key is requested by the TLS server via and early_secret LURK
 exchange. The EarlySecretRequest structure is composed of a
-ContextAgreementRequest (ctx_request) and a SecretRequest structure
-(secret_request). 
+SecretRequest structure (secret_request). 
 
 In our case, only the binder_key is requested so key_request is set to
 binder_key only. Similarly, to the TLS client, the handshake_context is
 not needed to generate the binder_key. However, the EarlySecret exchange
 requires the ClientHello to be provided so early secrets may be computed
-in the same round during 0-RTT handshake. 
-The chosen PSK is indicated in the PSK_id extension and the freshness
-function is indicated in the freshness extension.  
+in the same round during 0-RTT handshake.  The chosen PSK is indicated
+in the PSK_id extension and the freshness function is indicated in the
+freshness extension.  
 
 ~~~
 TLS Server                      
 Lurk Client                              Cryptographic Service
         EarlySecretRequest
-          ctx_request
           secret_Request
             key_request=binder_key
             handshake_context=ClientHello
             ext
               freshenss
               PSK_id
+              session_id
                                          EarlySecretResponse
-                                           ctx_response
                                            secret_response
                                 <---------   key
+                                             ext
+                                               session_id
 ~~~
 
-To complete to the ServerHello exchange, the TLS server
-needs the handshake and application secrets. These secrets are requested
-via an handshake_and_app_secret LURK exchange. The
-HandshakeAndAppSecretRequest is composed of  SecretRequest structure.
-The key_request is set to handshake (h_c, h_s) and application secrets
-(a_s, a_c). The Handshake Context (handshake_context) is set to
-ServerHello ... EncryptedExtensions as their is no authentication of the
-TLS client. Finally, the ephemeral ECDHE is provided or requested via
-the ephemeral extension. In our case, we assume the ephemeral secrets is
-generated by the tLS client is provided to the Cryptographic Service.  
+To complete to the ServerHello exchange, the TLS server needs the
+handshake and application secrets. These secrets are requested via an
+handshake_and_app_secret LURK exchange. The HandshakeAndAppSecretRequest
+is composed of  SecretRequest structure.  The key_request is set to
+handshake (h_c, h_s) and application secrets (a_s, a_c). The Handshake
+Context (handshake_context) is set to ServerHello ...
+EncryptedExtensions as their is no authentication of the TLS client.
+Finally, the ephemeral ECDHE is provided or requested via the ephemeral
+extension. In our case, we assume the ephemeral secrets is generated by
+the tLS client is provided to the CS.  
 
 The necessary Handshake Context to generate the handshake secrets is
-ClientHello ... ServerHello, so the Cryptographic Service can generate
-the handshake secrets. The necessary Handshake Context to generate the
-application secrets is ClientHello ... server Finished. So the
-Cryptographic Service needs to generate the Finished message before as
-in the case of the InitCerificateVerify exchange  detailed in
-{{sec:ecdhe-session-resumption-fullhandshake}}.  
+ClientHello ... ServerHello, so the CS can generate the handshake
+secrets. The necessary Handshake Context to generate the application
+secrets is ClientHello ... server Finished. So the CS needs to generate
+the Finished message before as in the case of the InitCerificateVerify
+exchange  detailed in {{sec:ecdhe-session-resumption-fullhandshake}}.  
 
 
 ~~~
@@ -2217,7 +2158,6 @@ TLS Server
 Lurk Client                              Cryptographic Service
         HandshakeAndAppRequest
           session_id
-          cookie
           secret_request
             key_request = h_c, h_s, a_c, a_s
             handshake_context = ServerHello ... EncryptedExtensions
@@ -2225,13 +2165,12 @@ Lurk Client                              Cryptographic Service
               ephemeral = dhe_secret          -------->
                                          HandshakeAndAppResponse
                                            session_id
-                                           cookie
                                            secret_response
                                              keys
                                    <---------  
 ~~~
 
-The Cryptographic Service returns the necessary secret to the TLS server
+The CS returns the necessary secret to the TLS server
 to complete the ServerHello response. 
 
 The remaining of the TLS handshake is proceeded similarly as described
@@ -2284,14 +2223,12 @@ When early application data is sent it is encrypted using the
 client_early_traffic_secret. This secret is retrieved using the
 early_secret LURK exchange. 
 
-The EarlySecretRequest is composed of a ContextAgreementRequest
-(ctx_request) and a SecretRequest (secret_request) substructure. 
-The TLS Client sets the key_request to client_early_traffic_secret
-(e_s). The handshake is set to ClientHello. The PSK is indicated via the
-the PSK_id extension, the freshness function is indicated via the
-freshness extension. If the TLS client is willing to have the ECDHE
-keys generated by the Cryptographic Service an ephemeral extension MAY
-be added also.   
+The EarlySecretRequest is composed of a SecretRequest (secret_request)
+substructure.  The TLS Client sets the key_request to
+client_early_traffic_secret (e_s). The handshake is set to ClientHello. The PSK
+is indicated via the the PSK_id extension, the freshness function is indicated
+via the freshness extension. If the TLS client is willing to have the ECDHE
+keys generated by the CS an ephemeral extension MAY be added also.   
 
 When multiple PSK are proposed by the TLS client, the first proposed PSK
 is used to encrypt the application data.
@@ -2300,42 +2237,42 @@ is used to encrypt the application data.
 TLS Client                      
 Lurk Client                              Cryptographic Service
         EarlySecretRequest
-          ctx_request
           secret_request
             key_request=e_s
             handshake_context=ClientHello
             ex
               PSK_id
               fresness
+              session_id
                                          EarlySecretResponse
-                                           ctx_response
                                            secret_response
                                 <---------   keys=e_s
+                                             ext
+                                               session_id
 ~~~
 
-Upon receiving the EarlySecretRequest, the Cryptographic Service
-generates the client_early_traffic_secret. 
+Upon receiving the EarlySecretRequest, the CS generates the
+client_early_traffic_secret. 
 
 The TLS client is able to send its ClientHello with associated binders
 and application data.  
 
 ### TLS server: ServerHello
 
-If the TLS server accepts the early data. It proceeds as described in session
-resumption described in section {{sec:session-resumption}}. In addition
-to the binder_key, the TLS server also request the client_early_traffic_secret
-to decrypt the early data as well as to proceed to the ServerHello
-exchange.
+If the TLS server accepts the early data. It proceeds as described in
+session resumption described in section {{sec:session-resumption}}. In
+addition to the binder_key, the TLS server also request the
+client_early_traffic_secret to decrypt the early data as well as to
+proceed to the ServerHello exchange.
 
 
 ### TLS client: Finished
 
 The TLS client proceeds as described in handshake based on ECDHE, PSK or
-PSK-ECDHE authentications described in
-{{sec:ecdhe_no_resumption}} and
-{{sec:ecdhe_resumption}}. The main difference is that upon
-requesting handshake and application secrets, using an HandshakeRequest
-the TLS client will not provide the ClientHello as part as the
+PSK-ECDHE authentications described in {{sec:ecdhe_no_resumption}} and
+{{sec:ecdhe_resumption}}. The main difference is that upon requesting
+handshake and application secrets, using an HandshakeRequest the TLS
+client will not provide the ClientHello as part as the
 handshake_context. The Client as already been provided during the
 EarlySercret exchange. 
 
@@ -2347,8 +2284,7 @@ or after the TLS handshake as a post handshake authentication. In both
 cases, the TLS client authentication is initiated by the TLS server
 sending a CertificateRequest. The authentication is performed via a
 CertificateVerify message generated by the TLS client but such
-verification does not involve the Cryptographic Service on the TLS
-server. 
+verification does not involve the CS on the TLS server. 
 
 ## TLS Client:Finished (CertificateRequest) 
 
@@ -2362,15 +2298,15 @@ addition to the application secrets via a certificate_verify LURK
 exchange. The CertificateVerifyRequest is composed of a Secret Request
 structure and a SigningRequest structure. 
 
-The key_request is set to the application
-secrets (a_c, a_s) and the handshake_context is set to server
-EncryptedExtensions ... later of server Finished/EndOfEarlyData. As the
-request follows a (BinderKey, EarlySecret, HandshakeSecret) or
-HandshakeSecret the Handshake Context on the Cryptographic Service now
-becomes: ClientHello ... later of server Finished/EndOfEarlyData which
-is the Handshake Context required to generate the CertificateVerify on
-the TLS client side and includes the Handshake Context required to
-generate the application secrets (ClientHello...server Finished).  
+The key_request is set to the application secrets (a_c, a_s) and the
+handshake_context is set to server EncryptedExtensions ... later of
+server Finished/EndOfEarlyData. As the request follows a (BinderKey,
+EarlySecret, HandshakeSecret) or HandshakeSecret the Handshake Context
+on the CS now becomes: ClientHello ... later of server
+Finished/EndOfEarlyData which is the Handshake Context required to
+generate the CertificateVerify on the TLS client side and includes the
+Handshake Context required to generate the application secrets
+(ClientHello...server Finished).  
 
 
 ~~~
@@ -2378,7 +2314,6 @@ TLS Client
 Lurk Client                              Cryptographic Service
         CertificateVerifyRequest
             session_id
-            cookie
             secret_request
               key_request
               handshake_context = EncryptedExtensions ... 
@@ -2386,15 +2321,14 @@ Lurk Client                              Cryptographic Service
             signing_request
                                          CertificateVerifyResponse
                                            session_id
-                                           cookie
                                            secret_response
                                              keys
                                            signing_response
                                 <---------   certificate_verify
 ~~~
 
-Upon receiving the CertificateRequest, the Cryptographic Service checks
-the session_id and cookie. 
+Upon receiving the CertificateRequest, the CS checks the session_id and
+cookie. 
 
 ## TLS Client Authentication (PostHandshake)
 
@@ -2402,14 +2336,13 @@ When post-handshake is enabled by the TLS client, the TLS client may
 receive at any time after the handshake a CertificateRequest message.
 When post handshake is enabled by the TLS client, as soon as the client
 Finished message has been sent, the TLS client sends a
-RegisteredNewSessionTicketRequest with an empty NewSessionTicket to register
-the remaining Handshake Context to the Cryptographic Service. ctx_id is
-set to opaque, handshake_context is set to earlier of client Certificate
-client CertificateVerify ... client Finished.
+RegisteredNewSessionTicketRequest with an empty NewSessionTicket to
+register the remaining Handshake Context to the CS. ctx_id is set to
+opaque, handshake_context is set to earlier of client Certificate client
+CertificateVerify ... client Finished.
 
 Upon receiving the RegisteredNewSessionTicketsRequest the Cryptographic
-is aware of the full Handshake Context.
-It updates ks_ctx.next_request
+is aware of the full Handshake Context.  It updates ks_ctx.next_request
 to post_handshake or register_session_ticket.
 
 ~~~
@@ -2417,7 +2350,6 @@ TLS Client
 Lurk Client                              Cryptographic Service
         RegisteredNewSessionTicketRequest
             session_id
-            cookie
             handshake_context
             ticket_list (empty)
                   <--------- RegisteredNewSessionTicketResponse
@@ -2437,18 +2369,16 @@ TLS Client
 Lurk Client                              Cryptographic Service
         PostHandshakeRequest
           session_id
-          cookie
           handshake_context=CertificateRequest
           app_n=N
                                          PostHandshakeResponse
                                            session_id
-                                           cookie
                               <---------   certificate_verify
 ~~~
 
-Upon receiving the PostHandshakeRequest the Cryptographic Service checks
-session_id and cookie. The necessary
-Handshake Context to generate the certificate_verify is ClientHello ...
-client Finished + CertificateRequest. Once the PostHandshakeResponse.
-Next requests expected are post_handshake or register_session_ticket.
+Upon receiving the PostHandshakeRequest the CS checks session_id and
+cookie. The necessary Handshake Context to generate the
+certificate_verify is ClientHello ...  client Finished +
+CertificateRequest. Once the PostHandshakeResponse.  Next requests
+expected are post_handshake or register_session_ticket.
 
