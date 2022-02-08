@@ -129,7 +129,8 @@ enum {
     invalid_ephemeral
     invalid_psk
     invalid_certificate
-     
+    invalid_cert_type
+
     ///not in the code
     invalid_key_id_type 
     invalid_signature_scheme
@@ -549,57 +550,77 @@ y indicates the selected_identity is present
 The CS retrieve the PSK identity from the ClientHello and SHOULD send an invalid_psk error if an error occurs. 
 For the TLS server, the CS MUST check the selected_identity parameter matches the selected_identity of the ServerHello as described in {{sec:handshake}}.
 
-## tls13_certificate {#sec:cert}
+## cert {#sec:cert}
 
-tls13_certificate provides information to the CS to compute a mandatory Certificate message of teh TLS handshake. 
-The tls13_certificate is only used for the server Certificate message on the TLS server and for the client Certificate message on the TLS client. 
-These respective Certificate message MUST be transmitted to the CS via the tls13_certificate and MUST NOT be transmitted by the handshake parameter.  
-On the other hand, on the TLS server side a potential client Certificate message is carried by the handshake parameter. 
-Similarly, on the TLS client side a potential server Certificate message is carried by the handshake parameter.
+cert indicates the presence or absence of a Certificate message as well as the necessary input for the generation of such message. 
+cert supports different type of compressed certificates defined by a cert_type.
 
-Upon receiving tls13_certificate, the CS MUST ensure the coherence with the current handshake messages. 
-On the TLS server exchanges between the E and the CS are different depending on whether the TLS server is authenticated via (EC)DHE or PSK. As a result, tls13_certificate is only present where it is needed and as such MUST be provided by the E. 
-The CS SHOULD raise a 'invalid_certificate' upon receiving a tls13_certificate of type no_certificate. 
-On the TLS client side, the certificate parameter as per {{!RFC8446}} section 4.4.2, MUST be provided when a CertificateRequest message is present. 
-Upon receiving a tls13_certificate of type finger_print or uncompressed, the CS MUST check the presence of a CertificateRequest and raise an 'invalid_certificate' otherwise. 
-Upon receiving a certificate of type no_certificate, the CS MUST check no CertificateRequest message is present and raise an error otherwise. 
-When the E needs to send an empty certificate, the uncompressed type SHOULD be used. 
-Non empty tls13_certificate MAY be transmitted to the CS using the type finger_print or uncompressed, depending on whether the CS has been configured or provisioned to generate the Certificate message from its fingerprint. 
-If the CS is unable to generate the Certificate message, an invalid_certificate' error SHOULD be raise. 
+cert supports FingerPrintCertificate to compress the Certificate message when certificates are configured on both the E and the CS. 
+This expected to be used for client Certificate exchanged on the TLS client between the CS and the E or server Certificate exchanged on the TLS server between the E and the CS. 
+The compressed format is a FingerPrintCertificate which contains a list of FingerPrintCertificateEntry where each opaque certificate data -- RawPublicKey or X509 content as described in {{!RFC8446}} section 4.4.2 -- is instead replaced by the 4 byte finger_print of these certificate data.
+The finger_print consists in the 4 first bytes of the output hash of the certificate using SHA256 as the hashing function. 
+
+cert also supports the CompressedCertificate {{!RFC8879}} or the uncompressed Certificate message format. 
+
+Finally, cert also indicates the absence of Certificate message with a special no_certificate type.  
+
+The CS MUST support the no_certificate, the finger_print an uncompressed cert_type. 
+The CS SHOULD raise a 'invalid_cert_type' error when it receives a unsupported cert_type and 'invalid_cert' when any other error occurs. 
+
+On the TLS server, when (EC)DHE authentication has been agreed (the handshake is not in psk_agreed), the CS MUST check the presence of a server Certificate message and reject and raise a 'invalid_certificate' error if cert_type is set to no_certificate.
+When the handshake is psk_proposed and psk_agreed, the CS MUST check the absence  of server Certificate and raise an 'invalid_certificate' if cert_type is not set to no_certificate. 
+When a client Certificate is present, the CS MUST check the presence of a corresponding Certificate Request message. 
 
 The structure of the tls13_certificate is as follows:
 
 ~~~
-enum { empty(0), finger_print(1), uncompressed(2), (255)
-}; LURKTLS13CertificateType 
+enum { zlib(1),  brotli(2),  zstd(3), no_certificate(128), finger_print(129), uncompressed(130), (255)
+} CertType; 
+
+struct{
+    select (certificate_type) {
+              case RawPublicKey:
+                uint32 finger_print;
+              case X509:
+                uint32 finger_print;
+          };
+          Extension extensions<0..2^16-1>;
+} FingerPrintCertificateEntry;
 
 struct {
-    LURKTLS13CertificateType certificate_type;
-    select (certificate_type) {
+    opaque certificate_request_context<0..2^8-1>;
+    FingerPrintCertificateEntry certificate_list<0..2^24-1>;
+} FingerPrintCertificate;
+
+
+
+struct {
+    CertType cert_type;
+    select (cert_type) {
+        case zlib, brotlib, zstd:
+          CompressedCertificate certificate; RFC8879 section 4
         case no_certificate:
-          // no payload
+          // no certificate
         case finger_print
-            uint32 hash_cert;
+            uint24 uncompressed_length;
+            FingerPrintCertificate certificate;
         case uncompressed:
             Certificate certificate; // RFC8446 section 4.4.2
     };
-} LURKTLS13Certificate;
+} Cert;
 ~~~
 
-XXXXXX
-The fingerprint shoudl only be about the Certificate entry as opposed to the whole certificate.
-XXXXXX
+certificate
+: structure carrying the compressed form of the Certificate message. 
+The current format supported are CompressedCertificate as detailed in {{!RFC8879}}, FingerPrintCertificate, and Certificate certificate as detailed in {{!RFC8446}} section 4.4.2.
 
-empty
-: indicates there is no certificates provided by this field.  
+certificate_list
+:  A sequence (chain) of FingerPrintCertificateEntry structures, each containing a single certificate and set of extensions.
 
-fingerprint
-: a 4 bytes finger print length that represents the fingerprinting of the TLS Certificate message. 
-Fingerprinting is described in {{!RFC7924}} and takes as input the full handshake message - that is a message of message type certificate with that contain the Certificate as its message_data. 
-In this document only the 4 most left bytes of the output are considered. 
-uncompressed
-: indicates the Certificate message as defined in {{!RFC8446}} is provided.
+certificate_request_context, extensions, certificate_type are defined in  {{!RFC8446}} section 4.4.2.
 
+finger_print
+: the first 4 bytes of the resulting SHA256 output of the certificate in DER format or the  ASN.1_subjectPublicKeyInfo {{!RFC7250}}. 
 
 Table {{table:cert}} indicates the presence of that field in the LURK exchanges. 
 
@@ -621,10 +642,10 @@ Table {{table:cert}} indicates the presence of that field in the LURK exchanges.
 +-----------------------+-------------+--------------------+ 
 
 * indicates certificate type MAY be set to no_certificate. 
-y indicates certificate type MUST NOT be set to empty
+y indicates certificate type MUST NOT be set to 'no_certificate'
 - indicates the certificate structure is absent
 ~~~
-{: #table:cert title="certificate per LURK exchange" }
+{: #table:cert title="cert in LURK exchange" }
 
 ## tag {#sec:tag}
 
