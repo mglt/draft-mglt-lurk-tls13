@@ -42,6 +42,7 @@ TODO:
 * E provides the certificate, this makes unnecessary the need to specify the sig_algounless one certificate can have different signature schemes.  
 * CS MUST check the certificate is supported by the client. 
 * There is no need to specify the certificate_contex in the Cert (finger_print) as it is known from the CertificateRequest for the client and has a fix value for the server. 
+* session_id  -> the presence or absence is determined by tag.last_exchange of the request!
 --- middle
 
 
@@ -840,7 +841,7 @@ struct{
 
 struct{
     uint8 tag;
-    select (tag.last_exchange){
+    select (SInitCertVerifyRequest.tag.last_exchange){
       case False:
         uint32 session_id;
     }
@@ -1030,132 +1031,68 @@ CS then generates the Finished message before generating the application and exp
 Figure {{fig:state:tls_client:clt}} summarizes the different possible LURK session as well as the different messages that are involved in the session. 
 
 Similarly to the TLS server, the credentials involved in the TLS client authentication are PK, (EC)DHE and PSK.  
-This document assumes PK, when involved, is always protected by the CS. 
-Unlike the TLS server, the TLS client can be authenticated within the TLS handshake as well as in a post handshake client authentication exchange. 
+This document assumes PK, when involved, is always protected by the CS and considers the three following scenarios:
 
-During the TLS handshake, the TLS client can be authenticated using a certificate base authentication or a PSK based authentication. 
-Note that according to {{!RFC8446}} section 4.3.2, certificate based authentication for the TLS client is only allowed when the TLS server's authentication is also certificate based. 
+* CS only protects PK in which case CS is limited to generating the signature of the CertificateVerify of the TLS client. 
+Such signature may be generated during the TLS handshake or during a client post handshake authentication. 
 
-Protection by CS of the client certificate authentication works similarly to the certificate based authentication on the TLS server side. 
-CS can protect the PK only or both the PK and the (EC)DHE private key. 
-When (EC)DHE is protected by the CS, E requests the CS, via a c_init_client_hello exchange, the (EC)DHE public key to build and send its ClientHello.  
-Upon receiving the ServerHello, E requests, via a c_all exchange, handshake, application and exporter secrets, and the signature of the client CertificateVerify. 
-E is able to build the client Finished message and send it to the TLS server to complete the TLS handshake. 
-When (EC)DHE is not protected by the CS, E can build the ClientHello message without any interaction with CS and only requests, via a c_init_cert_verify exchange, CS to generates the signature of the client CertificateVerify message and complete the handshake.
+* CS protects the (EC)DHE key or the PSK in addition to the PK. 
+In particular, resumed session are provided a similar level of security by CS. 
 
-Protection by CS of the PSK based authentication is provided with CS protecting the PSK and optionally the (EC)DHE or only the (EC)DHE to later bootstrap to protected authentication for session resumption.
-In any case, E requests the PSK binder_key or (EC)DHE public key to the CS, via a c_init_client_hello, to build and send the ClientHello. 
-Upon receiving the ServerHello, handshake, application and exporter secrets are generated via a c_all exchange, to complete the handshake. 
+The protection of the (EC)DHE or the PSK requires some interaction between E and the CS to build the ClientHello message (c_init_client_hello), as well as once the server Finished is received to build the optional CertificateVerify and client Finished message (c_client_finished).
+Once the TLS handshake is finished, E and CS may interact to register tickets received by the TLS server (c_register_ticket) or to proceed to a client post handshake authentication when requested by the TLS server and when permitted by the TLS client (c_post_hand_auth).
 
-Once the handshake is completed, the TLS server may request a client post handshake authentication. If the TLS client has not been authenticated or at least without involving the CS, E perform the post handshake authentication via a c_init_post_hand_auth. 
-On the contrary, the authentication is performed via a c_post_hand_auth.
+On the other hand, when only PK is protected, the generation of signature by the CS may occur for the client authentication (during the TLS handshake) or after, during a client post handshake authentication. 
+In both cases, E interacts with CS after the server Finished is received. 
+When the TLS server request the client authentication, E requests CS to generate the necessary signature for the client CertificateVerify message.
+When the TLS server does not request the client authentication and that TLS client has previously indicated the support for post handshake authentication, E provides to CS the necessary context to later perform the post handshake authentication. 
+More specifically, a interaction between E and the CS during a post handshake authentication only would either require E to provide the full handshake context which would cause too much penalty to implementation that only keep the transcript of the handshake. 
+The alternative of providing the necessary transcript to generate the signature would prevent the CS to control the input that is actually signed as well as to provide anti-replay protection as detailed in {{sec:random}}. 
+When the TLS client has indicated the support for post handshake authentication, the only permitted exchange is c_post_hand_auth. 
 
-In addition, once the handshake has been completed, E may register the ticket received from the TLS server to CS via a c_register_tickets exchange.
-
-The remaining of the section describes CS behavior. Implementation may differ from the description and generates the response otherwise. 
-The response SHOULD however remain coherent with the description provided. 
 
 ~~~
-ClientHello    ^   (EC)DHE generated by CS    no
-  Derivation   |   or PSK in CS Proposed -------+           
-ClientHello    |       yes |                    |
-  sent      -->v    c_init_client_hello         |
-ServerHello -->^           |         ks_proposed/agreed no
-  received     |           |         certificate_agree --+
-               |           |                yes |        |
-ServerHello    |         c_all         c_init_cert_verify|
-  Treatment    |           |                    |        |
-clientFinished |           +-------+------------+        |     no
-  sent      -->v                   |        post_auth_proposed --+
-               ^                   |                     +       |
-               |                   |         CertificateRequest  |
-               |                   |                     |       |
-               |                   |        c_init_post_hand_auth|
-               |                   |                     |       |
-               |+----------------->|<--------------------+       |
-Posthandshake  ||        +---------+-------+                     |
-Treatment      ||        |                 |                     |
-               ||post_auth_proposed  (EC)DHE generated by CS or  |
-               ||        +           PSK in use in CS            |
-               ||CertificateRequest        +                     |
-               ||        |          NewSessionTicket             |
-               ||        |                 |                     |
-               ||c_post_hand_auth c_register_tickets             |
-               ||        |                 |                     |
-               ||        +-------+---------+                     |
-               ||                |                               |
-               v+----------------+                         +-----+
-                                 |                         |
-                            LURK session         LURK session
-                            closed               not initiated
+ClientHello    ^ ephemeral_method is 'cs_generated' no  
+  Derivation   | or PSK in CS Proposed --------------+           
+ClientHello    |     yes |                           |
+  sent      -->v  c_init_client_hello                |
+ServerHello -->^         |              certificate_request or   no
+  received     |         |              post_hand_auth_proposed ---+
+               |         |                       yes |             |
+ServerHello    | c_client_finished         c_init_client_finished  |
+  Treatment    |         |                           |             |
+clientFinished |         +---------+-----------------+     no CS protection
+  sent      -->v                   |                       provided  
+               ^                   |                          
+               |+----------------->+                            
+Posthandshake  ||        +---------+------------+ 
+Treatment      ||        |                      |
+               ||post_hand_auth_proposed  ephemeral_method is 'cs_generated'
+               ||        +                or  PSK in use in CS 
+               ||CertificateRequest             + 
+               ||        |                NewSessionTicket
+               ||        |                      | 
+               ||c_post_hand_auth         c_register_tickets
+               ||        |                      | 
+               ||        +-------+--------------+ 
+               ||                | 
+               v+----------------+           
+                                 |           
+                            LURK session     
+                            closed           
 ~~~
 {: #fig:state:tls_client:clt title="LURK client State Diagram" }
 
 
 
-## c_init_post_hand_auth  {#sec:c_init_post_hand_auth}
+## c_init_client_finished
 
-The c_init_post_hand_auth occurs when the TLS client performs post handshake authentication while no previous interactions occurred between the TLS client and the CS.
+E initiates a c_init_client_finished exchange during a TLS handshake when it receives a server Finished message an meets the following conditions: 
 
-The TLS server MAY authenticated via its certificate but as this is the initial interaction  between E and CS, if PSK authentication is used, the PSK is not protected by CS. 
-Similarly, (EC)DHE is neither protected by CS and as we assumed the client PK is protected by CS, the client has not been authenticated with its certificate. 
+1. The TLS handshake has not required any interaction between E and CS.
+2. The TLS server requests a client authentication or the TLS client has enabled client post handshake authentication. 
 
-~~~
-struct{
-  uint8 tag;
-  select (tag.last_exchange){
-    case False:
-      uint32 session_id;
-  }
-  FreshnessFunct freshness; 
-  Handshake handshake<0..2^32> //RFC8446 section 4 
-  Cert server_certificate;
-  Cert client_certificate
-}CInitPostHandAuthRequest
-
-
-struct{
-  unit8 tag
-  select (tag.last_exchange){
-    case False:
-      uint32 session_id;
-  }
-  Signature signature 
-}CInitPostHandAuth
-~~~
-
-After the TLS handshake is completed
-
-tag 
-: is defined in {{sec:tag}}. 
-The TLS client sets tag.last_exchange if further post handshake authentications are expected.
-Similarly CS sets the tag.last_exchange if further post handshake authentications are permitted. 
-Note that it is out of scope of this specification to specify the reasons, but it is RECOMMENEDED CS sets life time to LURK session as well as limits the maximum number of post handshake authentications.
-
-ephemeral 
-: is defined in {{sec:ephemeral}} and ephemeral_method MUST be set to 'e_generated' when the TLS handshake agreed an ECDHE or a PSK-ECDHE authentication. 
-The ephemeral_method MUST be set to 'no_secret' when PSK the TLS handshake agreed on PSK authentication.
-
-handshake 
-: is defined in {{sec:handshake}} and post handshake authentication MUST be enabled by the TLS client. 
-
-cert 
-: is defined in {{sec:cert}} and is used by the TLS client to indicate the expected certificate to be used to compute the signature as well as the certificate that is expected to be send further to the TLS server. 
-
-sig_algo 
-: is defined in {{sec:sig}} and indicates the selected algorithm. 
-
-signature
-: is defined in {{sec:sig}}. 
-
-
-
-## c_init_cert_verify
-
-The c_init_cert_verify exchange occurs when the TLS client is being requested to authenticate during the TLS handshake. 
-This exchange is used when only PK is protected by CS and E has generated the (EC)DHE shared secret, as well as any necessary secrets, and the only output expected from CS is the signature.   
-
-The CInitCertVerifyRequest and CInitCertVerifyResponse are detailed below:
+The CInitClientFinishedRequest and CInitClientFinishedResponse are detailed below:
 
 ~~~
 struct{
@@ -1164,50 +1101,58 @@ struct{
       case False:
         uint32 session_id;
     }
-    FreshnessFunct freshness; 
     Ephemeral ephemeral; ## e_generated
+    opaque psk<0..2^16>;
+    FreshnessFunct freshness; 
     Handshake handshake<0..2^32>; //RFC8446 section 4
     Cert server_certificate; 
     Cert client_certificate 
-    SignatureScheme sig_algo; //RFC8446 section 4.2.3.
-}CInitCertVerifyRequest
+}CInitClientFinishedRequest
 
 struct{
     uint8 tag;
-    select (tag.last_exchange){
+    select (CInitClientFinishedRequest.tag.last_exchange){
       case False:
         uint32 session_id;
     }
     Signature signature;
-}CInitCertVerifyResponse
+}CInitClientFinishedResponse
 ~~~
 
+psk
+: when provided, the PSK to be used for the schedule as described in {{!RFC8446}} section 7.1. 
+
+If the TLS handshake is not post_hand_auth_proposed, E MUST set tag.last_exchange to True. 
+The (EC)DHE is generated by E and ephemeral.ephemeral_method MUST be set to 'e_generated'. 
+The Handshake consists in every messages up to the server Finished message to which the server Certificate message, if present has been omitted and is instead carried in the server_certificate. 
+If handshake is psk_agreed, server_certificate.cert_type is set to 'no_certificate', otherwise another cert_type MUST be used.  
+client_certificate.cert_type is set to 'no_certificate' in the absence of CertificateRequest message and other type MUST be used otherwise. 
+
+Upon receiving a CInitClientFinishedRequest, CS checks ephemeral.ephemeral_method is not set to 'cs_generated' otherwise an 'invalid_ephemeral' error is raised. 
+Then CS checks handshake and its coherence with the other parameters.
+CS checks if the handshake is certificate_request or post_hand_auth_proposed.
+
+XXXX
+If ephemeral.ephemeral_method is set to 'no_secret', CS checks the handshake is psk_proposed and psk_agree.
+If ephemeral.ephemeral_method is set to 'e_generated', CS checks, the handshake is not ks_agreed.
+If server_certificate.cert_type is set to 'no_certificate', CS checks the handshake is psk_proposed and psk_agreed. 
+If server_certificate.cert_type is not set to 'no_certificate', CS checks the handshake is certificate. 
+If the client_certificate is set to 'no_certificate', CS checks the handshake is not certificate_request. 
+If the client_certificate is not set to 'no_certificate', CS checks the handshake is certificate_request. 
+If one if these condition is not met, CS raises an 'invalid_handshake' error. 
 
 
-As detailed in {{!RFC8446}} section 4.4, the generation requires some Handshake context as well as the client_handshake_traffic_secret (h_c) which is generated by the key schedule and requires the (EC)DHE shared secret.
-CS does not have any previous knowledge of the TLS handshake and all information need to be provided to CS. 
+CS place the server_certificate and client_certificate with a cert_type different from 'no_certificate' in the handshake. 
+CS generates the ClientHello.random with the freshness function as described in {{sec:random}}.
+If the handshake is certificate_request, CS generates the signature. 
 
-E MUST set tag.last_exchange to True unless post handshake authentication has been enabled by E with a post_handshake_auth" extension of the ClientHello.
-In such case, E needs to determine if further post handshake handshake may be requested by the TLS server, and set it stag.last_exchange accordingly. 
-Typically, an application that is only looking for a single client authentication within the TLS handshake or as a post handshake may set tag.last_exchange to True upon authenticating the client in the TLS handshake. 
+If the handshake is not post_hand_auth_proposed, CS SHOULD set tag.last_exchange to True.
+If the handshake is post_hand_auth_proposed, CS sets tag.last_exchange according to its policy. 
 
-E splits the necessary Handshake context which includes the server Certificate as well as the client Certificate between the server_certificate, teh client_certificate and the handshake structure. 
-E protects the exchange from being replayed by setting the  ClientHello.random as described {{sec:freshness}} and set freshness accordingly. 
-The (EC)DHE share secret is provided via the ephemeral and ephemeral.ephemeral_method is set to 'e_generated'.
+If tag.last_exchange is False, CS generates the client CertificateVerify and client Finished message, so further post handshake authentication can be handled.
+The generation of the Finished message requires the h_c to be computed key schedule as described in {{!RFC8445}} section 7.1. 
+Unless CS has the knowledge of the PSK to be used, CS takes psk as well as ephemeral to perform the key schedule.
 
-Upon receiving a CInitCertVerifyRequest, CS checks the tag.last_exchange to determine the presence of a session_id. 
-As detailed in ((sec:tag}}, CS sets tag.last_exchange of the CInitCertVerifyResponse to False if E has set it False, the handshake is post_hand_auth_proposed  and the CS policy permits it. 
-Otherwise tag..last_exchange is set to True.
-
-According to {{!RFC8446}} client authentication during the TLS handshake is not valid with a PSK or PSK based authentication. 
-The Handshake context MUST check the handshake is certificate_agree and certificate_request with the presence of server Certificate, CertificateRequest, server CertificateVerify messages.
-As the Certificate message is generated from the certificate structure, its presence may be checked after it has been generated by the CS or independently in the certificate and handshake structures. 
-
-CS then updates the ClientHello.random with the freshness function as described in {{sec:freshness}}.
-
-CS checks the ephemeral.ephemeral_method is set to 'e_generated' and initiates the key schedule to compute the h_c with the shared secret. 
-Once h_c has been computed, insert the client Certificate and computes the signature.  
-If TLS client expects additional post handshake authentication, CS computes the CertificateVerify and Finished messages. 
 
 ## c_post_hand_auth {#sec:c_post_hand_auth}
 
@@ -2061,7 +2006,7 @@ sig_algo designates the signature algorithm.
 ~~~
 TLS server                      
 LURK client                              Cryptographic Service
-  CInitCertVerifyRequest
+  CInitClientFinishedRequest
     tag.last_exchange=True   -------->
     freshness = sha256
     ephemeral
@@ -2073,7 +2018,7 @@ LURK client                              Cryptographic Service
     certificate
       certificate_type = finger_print
     sig_algo = ed25519
-                                   CInitCertVerifyResponse
+                                   CInitClientFinishedResponse
                                      tag.last_exchange=True
                                      signature = sig
                                    <--------- 
