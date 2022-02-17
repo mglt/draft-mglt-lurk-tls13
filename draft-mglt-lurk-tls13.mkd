@@ -300,9 +300,6 @@ early_data_agreed
 post_hand_auth_proposed:
 : A TLS handshake is "post_hand_auth_proposed" when the TLS client indicates the support of Post-Handshake Client Authentication. The ClientHello contains a post_handshake_auth extension.
 
-
-
-
 ### s_init_cert_verify
 
 This exchange implies the authenticated mode is (EC)DHE and CS MUST check the handshake is not 'psk_agreed' and is both 'ks_proposed' and  'ks_agreed'. 
@@ -346,13 +343,13 @@ To do so, CS MUST check the cipher suite selected by the KDF hash algorithm asso
 When instructed to, CS generates the (EC)DHE and add it to its local ServerHello as detailed in {{sec:ephemeral}}. 
 CS also generates the server finished message as detailed in  {{!RFC8446}} section 4.4.4.
 
-### c_init_cert_verify
+### c_init_client_finished
 
-This exchange occurs when the TLS client is authenticated via its certificate. 
-CS MUST check the handshake indicates the TLS server has been authenticated via its certificate as well as that it contains a request from the TLS server for the client authentication. 
-This is performed by checking the handshake is certificate_agreed, certificate_request.  
-In addition, CS MUST check the presence of a server CertificateVerify message. 
-Note also the Certificate message must be included but is not directly carried by the handshake structure, so the verification, if implemented by CS, can only be performed after the generation of the Certificate message as detailed in {{sec:cert}}. 
+This exchange occurs when the TLS client has proposed client post handshake authentication or when the TLS server is requesting client authentication during the TLS handshake.
+As a result, CS MUST check the handshake is post_hand_auth_proposed or certificate_request and raise an 'invalid_handshake' error otherwise.  
+
+Note that the Handshake context MAY but not necessarily carry a server Certificate message or  a client Certificate message. 
+These message are not part of the handshake and carried in Cert structures as defined in {{sec:cert}}. 
 
 ### c_post_hand_auth 
 
@@ -365,10 +362,27 @@ c_post_hand_auth handshake is composed of the CertificateRequest message.
 
 ## session_id {#sec:session_id}
 
-The session_id is a 32 bit identifier that identifies a LURK session between  E and the CS. 
-Unless the exchange is sessionless, the session_id is negotiated at the initiation of the session where  E (resp. the CS) indicates the value to be used for inbound session_id in the following exchanges.       
+A TLS handshake and the establishment of a TLS session may involve a single interaction between E and CS or multiple interactions.
+In the first case, the interactions are called stateless while in the other case, interactions are statefull and the different interactions are managed through a session identified by E and CS with a session_id. 
+
+The session_id is a 32 bit identifier that identifies a LURK session between  E and the CS. Session_ids are agreed in the first exchange of the session that instantiates the session. 
+The exchange is designate with 's_init_' or 'c_init_' and E (resp. the CS) indicates the value to be used for inbound session_id in the following exchanges.       
 For other exchanges, the session_id is set by the sender to the inbound value provided by the receiving party. 
-When CS receives an unexpected session_id CS SHOULD return an invalid_session_id error. 
+Once the session_id has been negotiated by E, all message of the session will have a session_id.  
+
+When CS receives an unexpected session_id CS SHOULD return an invalid_session_id error.
+
+Some exchange - indicated with * in {{table:session_id}} - may initiate a session or be part of a stateless interaction between E and CS. 
+More specifically, the s_init_cert_verify exchange instantiates a session only when E expects it to be followed by one or multiple s_new_tickets messages. 
+If the TLS server does not intend to provide session resumption for example, no further s_new_tickets exchange are expected. 
+A similar situation occurs with the c_init_client_finished exchange that may be followed by one or multiple c_post_hand_auth exchanges. 
+If the TLS client does not supports post handshake authentication, no further exchanges are envisioned.
+
+To handle with these case, E indicates a stateless interaction by setting tag.last_exchange to True and MUST omit the session_id. 
+As described in {{sec:tag}}, CS MUST set the tag.last_message to True and MUST as well and MUST omit the session_id.
+Reversely, E may also initiates a session, in which case, it sets tag.last_exchange to False and it MUST provide a session_id. 
+Upon receiving the request, CS may establish a session or refuse the establishment of the session and instead consider the stateless mode.  
+To refuse the establishment of the session, CS sets the tag.last_message to True and omit the session_id.
 
 The session_id structure is defined below:
 ~~~
@@ -378,21 +392,21 @@ uint32 session_id
 Table {{table:session_id}} indicates the presence of the session_id for each exchange. 
 
 ~~~
-+-----------------------+------------+
-| LURK exchange         | session_id |
-+-----------------------+------------+
-| s_init_cert_verify    |      *     |
-| s_new_ticket          |      y     |
-| s_init_early_secret   |      y     |
-| s_hand_and_app_secret |      y     |
-| c_init_post_hand_auth |      *     |
-| c_post_hand_auth      |      y     |
-| c_init_cert_verify    |      *     |
-| c_init_client_hello   |      y     |
-| c_client_hello        |      y     |
-| c_hand_and_app_secret |      y     |
-| c_register_tickets    |      y     |
-+-----------------------+------------+
++------------------------+------------+
+| LURK exchange          | session_id |
++------------------------+------------+
+| s_init_cert_verify     |      *     |
+| s_new_ticket           |      y     |
+| s_init_early_secret    |      y     |
+| s_hand_and_app_secret  |      y     |
+| c_init_client_finished |      *     |
+| c_post_hand_auth       |      y     |
+| c_init_cert_verify     |      *     |
+| c_init_client_hello    |      y     |
+| c_client_hello         |      y     |
+| c_hand_and_app_secret  |      y     |
+| c_register_tickets     |      y     |
++------------------------+------------+
 
 y indicates the session_id is present
 * indicates session_id may be present (depending on the tag.last_exchange)
@@ -506,29 +520,38 @@ More specifically, CS MUST check the handshake is 'psk_proposed', 'psk_agreed' a
 When the ephemeral method or the group is not supported, expected extensions are not found CS SHOULD return an invalid_ephemeral error. 
 
 Table {table:ephemeral} indicates the exchanges that contain the ephemeral parameter as well as the permitted methods. 
+The CS MUST check compliance with Table {table:ephemeral} and raise an 'invalid_ephemeral' error in case of non compliance.
+
+The c_init_client_finished exchange, is not restricted a specific authentication and CS SHOULD check the authentication methode agreed between the TLS client and the TLS server is conform to the provided ephemeral.    
+If ephemeral.method is set to 'no_secret', CS checks the handshake is psk_proposed and psk_agree to ensure PSK authentication has been agreed.
+If ephemeral.method is set to 'e_generated', CS checks, the handshake is ks_agreed, to ensure certificate or PSK based authentication with ECDHE has been agreed. 
+If these condition are not met, CS SHOULD raise an invalid_ephemeral' error.
+
 
 ~~~
 +-----------------------+-----------+---------------------------+  
-|                       |           |  ephemeral_method= secret |
-| LURK exchange         | ephemeral | no | provided | generated |
+|                       |           |  method= secret |
+| LURK exchange         | ephemeral | no |  e_gen.  |  cs_gen.  |
 +-----------------------+-----------+----+----------+-----------+
 | s_init_cert_verify    |     y     | -  |    y     |     y     |
 | s_new_ticket          |     -     | -  |    -     |     -     |
 | s_init_early_secret   |     -     | -  |    -     |     -     |
 | s_hand_and_app_secret |     y     | y  |    y     |     y     |
-| c_init_post_hand      |     y     | -  |         |          |
-| c_post_hand_auth           |     y     | -  |         |          |
+| c_init_client_finished|     y     | y  |    y     |     -     |
+| c_post_hand_auth      |     y     | -  |          |           |
 | c_init_cert_verify    |     y     | -  |    y     |    -      |
-| c_init_client_hello   |     y     | y  |         |          |
-| c_client_hello        |     y     | y  |         |          |
-| c_hand_and_app_secret |     y     | y  |         |          | 
-| c_register_tickets    |     -     | -  |         |          |
+| c_init_client_hello   |     y     | y  |          |           |
+| c_client_hello        |     y     | y  |          |           |
+| c_hand_and_app_secret |     y     | y  |          |           | 
+| c_register_tickets    |     -     | -  |          |           |
 +-----------------------+-----------+----+----------+-----------+
 
-y indicates presence of ephemeral or possible value for ephemeral_method
-- indicates absent or ephemeral or incompatible value for ephemeral_method
+y indicates possible value for method
+- indicates incompatible value for method
 ~~~
 {: #table:ephemeral title="Ephemeral field in LURK exchange" }
+
+
 
 
 The EphemeralRequest and EphemeralResponse structures are defined as follows:
@@ -551,6 +574,8 @@ EphemeralResponse {
   }
 }
 ~~~
+
+
 
 ## selected_identity {#sec:selected_identity}
 
@@ -668,27 +693,38 @@ finger_print
 Table {{table:cert}} indicates the presence of that field in the LURK exchanges. 
 
 ~~~
-+-----------------------+-------------+-------------------+  
-| LURK exchange         | certificate | certificate type  |
-+-----------------------+-------------+-------------------+
-| s_init_cert_verify    |      y      | server            |
-| s_new_ticket          |      *      | client            |
-| s_init_early_secret   |      -      |                   |  
-| s_hand_and_app_secret |      -      |                   |
-| c_init_post_hand_auth |      y      | client            |
-| c_post_hand_auth      |      y      | client            |
-| c_init_cert_verify    |      y      | client and server |
-| c_init_client_hello   |      -      |                   |
-| c_client_hello        |      -      |                   |
-| c_hand_and_app_secret |      y      | client            |
-| c_register_tickets    |      -      |                   |
-+-----------------------+-------------+-------------------+ 
++------------------------+------+-------------------+  
+| LURK exchange          | cert | certificate type  |
++------------------------+------+-------------------+
+| s_init_cert_verify     |  y   | server            |
+| s_new_ticket           |  y   | client*           |
+| s_init_early_secret    |  -   |                   |  
+| s_hand_and_app_secret  |  -   |                   |
+| c_init_client_finished |  y   | client* / server* |
+| c_post_hand_auth       |  y   | client            |
+| c_init_client_hello    |  -   |                   |
+| c_client_hello         |  -   |                   |
+| c_hand_and_app_secret  |  y   | client            |
+| c_register_tickets     |  -   |                   |
++------------------------+------+-------------------+ 
 
-* indicates certificate type MAY be set to no_certificate. 
-y indicates certificate type MUST NOT be set to 'no_certificate'
+y indicates the presence of certificate in the exchange
 - indicates the certificate structure is absent
+* indicates certificate type MAY be set to no_certificate. 
 ~~~
 {: #table:cert title="cert in LURK exchange" }
+
+
+In the s_new_ticket exchange, if cert_type is set to 'no_certificate', the handshake does not have a CertificateVerify message.
+Reversely, if cert_type is not set to 'no_certificate' a CertificateVerify message MUST be present in the hanshake. 
+
+In the c_init_client_finished, if server_certificate.cert_type is set to 'no_certificate', CS checks the handshake is psk_proposed and psk_agreed. 
+Reversely, if server_certificate.cert_type is not set to 'no_certificate', CS checks the handshake is certificate_agreed. 
+If the client_certificate is set to 'no_certificate', CS checks the handshake is not certificate_request. 
+Reversely, if the client_certificate is not set to 'no_certificate', CS checks the handshake is certificate_request. 
+
+If one if these condition is not met, CS raises an 'invalid_certificate' error. 
+
 
 ## tag {#sec:tag}
 
@@ -700,7 +736,12 @@ When E is expecting the current exchange to be the last one, it sets the tag.las
 CS MUST respond with a tag.last_exchange set to True and E MUST ignore any other values. 
 When E does not expect the current message to be the last one it sets the tag.last_exchange to False. 
 CS responds with a tag.last_exchange set to False to confirm additional exchanges may be performed.
-On the other hand, CS may also indicates this is the last exchange and set tag.last_exchange to True, in which case E MUST reset the session and MUST NOT proceed to any further exchanges.
+On the other hand, CS may also indicates this is the last exchange due to configuration or internal policies and set tag.last_exchange to True. 
+Typically, for the s_new_ticket exchange, it is RECOMMENDED CS is configured with a maximum number of tickets to emit, and to set the tag.last_exchange to True when this limit has been reached. 
+For the c_init_client_finished exchange, the CS MUST set tag.last_exchange to True if the handshake is not post_hand_auth_proposed. 
+For the c_post_hand_auth exchange, it is RECOMMENDED CS is configured with a maximum number of post handshake authentication and set the tag.last_exchange to True once this limit has been reached. 
+
+Upon receiving a response with a tag.last_exchange set to True, E MUST reset the session and MUST NOT proceed to any further exchanges.
 
 In this document, we use setting, setting to True to indicate the bit is set to 1. Respectively, we say unsetting, setting to False to indicate the bit is set to 0. 
 
@@ -720,30 +761,30 @@ Bits that are not specified within a given exchange MUST be set to zero by the s
 
 
 ~~~
-+-----------------------+--------------+--------------+  
-| LURK exchange         | last_exchange | cert_request |
-+-----------------------+--------------+--------------+
-| s_init_cert_verify    |       y      |       -      | 
-| s_new_ticket          |       y      |       -      |
-| s_init_early_secret   |       -      |       -      |
-| s_hand_and_app_secret |       y      |       -      |
-| c_init_post_hand_auth |       y      |       -      |
-| c_post_hand_auth      |       y      |       -      |
-| c_init_cert_verify    |       y      |       -      |
-| c_init_client_hello   |       -      |       -      |
-| c_client_hello        |       -      |       _      |
-| c_hand_and_app_secret |       y      | y (response) |
-| c_register_tickets    |       y      |       -      |
-+-----------------------+--------------+--------------+
++------------------------+---------------+ 
+| LURK exchange          | last_exchange |
++------------------------+---------------+
+| s_init_cert_verify     |       y       |
+| s_new_ticket           |       y       |
+| s_init_early_secret    |       -       |
+| s_hand_and_app_secret  |       y       |
+| c_init_client_finished |       y       |
+| c_post_hand_auth       |       y       |
+| c_init_cert_verify     |       y       |
+| c_init_client_hello    |       -       |
+| c_client_hello         |       -       |
+| c_hand_and_app_secret  |       y       |
+| c_register_tickets     |       y       |
++------------------------+---------------+
 
 y indicates tag is present
 - indicates tag is absent
 ~~~
 {: #table:tag title="tag per LURK exchange" }
 
+c_init_client_finished 
 
 ## secret {#sec:secret}
-
 
 The Secret structure is used by CS to send the various secrets derived by the key schedule described in {{!RFC8446}} section 7.
 
@@ -802,7 +843,6 @@ struct {
 } Signature; 
 ~~~
 
-
 # LURK exchange on the TLS server
 
 This section describes exchanges performed on the TLS server. 
@@ -841,7 +881,7 @@ struct{
 
 struct{
     uint8 tag;
-    select (SInitCertVerifyRequest.tag.last_exchange){
+    select (tag.last_exchange){
       case False:
         uint32 session_id;
     }
@@ -865,7 +905,7 @@ If tag.last_exchange is set to True, the session_id structure is ignored by the 
 
 E sets the freshness function as detailed in {{sec:freshness}}. It is RECOMMENDED to use a freshness function that provides similar security as TLS Hash function.
 
-E either generates the (EC)DHE or requests CS to generates, in which case it respectively sets the ephemeral.ephemeral_method to 'e_generated' or 'cs_generated' and proceeds as described in {{sec:ephemeral}}.
+E either generates the (EC)DHE or requests CS to generates, in which case it respectively sets the ephemeral.method to 'e_generated' or 'cs_generated' and proceeds as described in {{sec:ephemeral}}.
 
 E provides the necessary TLS Handshake context in handshake and certificate as respectively detailed in {{sec:handshake}} and {{sec:cert}}.
 
@@ -1009,8 +1049,8 @@ Parameters are defined in their corresponding sections tag ({{sec:tag}}), sessio
 
 To send a SHandAndAppSecretRequest, E sets the tag.last_exchange as described in {{sec:s_init_cert_verify}}.
 As described in {{sec:session_id}} E sets the session_id with the value received in the SInitEarlySecretResponse.
-If E does decides the TLS server is authenticated with the PSK mode without (EC)DHE, it sets ephemeral.ephemeral_method to 'no_secret'. 
-If the TLS server is authenticated with PSK and (EC)DHE, then the ephemeral.ephemeral_method can be set to 'e_generated' or 'cs_generated' depending whether E or CS generates the (EC)DHE private key. 
+If E does decides the TLS server is authenticated with the PSK mode without (EC)DHE, it sets ephemeral.method to 'no_secret'. 
+If the TLS server is authenticated with PSK and (EC)DHE, then the ephemeral.method can be set to 'e_generated' or 'cs_generated' depending whether E or CS generates the (EC)DHE private key. 
 
 Upon receiving the SHandAndAppSecretRequest sets the tag.last_exchange as described in {{sec:s_init_cert_verify}}.
 The session_id is set to the value provided in the SInitEarlySecretRequest.
@@ -1052,7 +1092,7 @@ When the TLS client has indicated the support for post handshake authentication,
 
 
 ~~~
-ClientHello    ^ ephemeral_method is 'cs_generated' no  
+ClientHello    ^ method is 'cs_generated' no  
   Derivation   | or PSK in CS Proposed --------------+           
 ClientHello    |     yes |                           |
   sent      -->v  c_init_client_hello                |
@@ -1067,7 +1107,7 @@ clientFinished |         +---------+-----------------+     no CS protection
                |+----------------->+                            
 Posthandshake  ||        +---------+------------+ 
 Treatment      ||        |                      |
-               ||post_hand_auth_proposed  ephemeral_method is 'cs_generated'
+               ||post_hand_auth_proposed  method is 'cs_generated'
                ||        +                or  PSK in use in CS 
                ||CertificateRequest             + 
                ||        |                NewSessionTicket
@@ -1101,17 +1141,17 @@ struct{
       case False:
         uint32 session_id;
     }
-    Ephemeral ephemeral; ## e_generated
-    opaque psk<0..2^16>;
-    FreshnessFunct freshness; 
     Handshake handshake<0..2^32>; //RFC8446 section 4
     Cert server_certificate; 
     Cert client_certificate 
+    FreshnessFunct freshness; 
+    Ephemeral ephemeral; ## e_generated
+    opaque psk<0..2^16>;
 }CInitClientFinishedRequest
 
 struct{
     uint8 tag;
-    select (CInitClientFinishedRequest.tag.last_exchange){
+    select (tag.last_exchange){
       case False:
         uint32 session_id;
     }
@@ -1122,36 +1162,33 @@ struct{
 psk
 : when provided, the PSK to be used for the schedule as described in {{!RFC8446}} section 7.1. 
 
-If the TLS handshake is not post_hand_auth_proposed, E MUST set tag.last_exchange to True. 
-The (EC)DHE is generated by E and ephemeral.ephemeral_method MUST be set to 'e_generated'. 
+If the TLS handshake is not post_hand_auth_proposed, E set tag.last_exchange to True, otherwise, tag.last_exchange SHOULD be set to False. 
+
 The Handshake consists in every messages up to the server Finished message to which the server Certificate message, if present has been omitted and is instead carried in the server_certificate. 
 If handshake is psk_agreed, server_certificate.cert_type is set to 'no_certificate', otherwise another cert_type MUST be used.  
 client_certificate.cert_type is set to 'no_certificate' in the absence of CertificateRequest message and other type MUST be used otherwise. 
 
-Upon receiving a CInitClientFinishedRequest, CS checks ephemeral.ephemeral_method is not set to 'cs_generated' otherwise an 'invalid_ephemeral' error is raised. 
-Then CS checks handshake and its coherence with the other parameters.
-CS checks if the handshake is certificate_request or post_hand_auth_proposed.
+If the TLS server is authenticated with a certificate or using PSK-ECDHE, the (EC)DHE is generated by E and ephemeral.method is set to 'e_generated'. 
+If the TLS server is authenticated with PSK, the ephemeral.method is set to 'no_secret'.  
 
-XXXX
-If ephemeral.ephemeral_method is set to 'no_secret', CS checks the handshake is psk_proposed and psk_agree.
-If ephemeral.ephemeral_method is set to 'e_generated', CS checks, the handshake is not ks_agreed.
-If server_certificate.cert_type is set to 'no_certificate', CS checks the handshake is psk_proposed and psk_agreed. 
-If server_certificate.cert_type is not set to 'no_certificate', CS checks the handshake is certificate. 
-If the client_certificate is set to 'no_certificate', CS checks the handshake is not certificate_request. 
-If the client_certificate is not set to 'no_certificate', CS checks the handshake is certificate_request. 
-If one if these condition is not met, CS raises an 'invalid_handshake' error. 
+This exchange occurs when E is performing the key schedule. 
+E SHOULD provide the PSK value unless E knows CS is aware of the PSK or tag.last_message is set to True. 
+In fact the key schedule is only necessary to enable post handshake authentication.
+If neither E nor CS are aware of PSK, the TLS client MUST NOT propose post handshake authentication.
 
-
-CS place the server_certificate and client_certificate with a cert_type different from 'no_certificate' in the handshake. 
+Upon receiving a CInitClientFinishedRequest, 
+CS place the server_certificate and client_certificate with a cert_type different from 'no_certificate' in the handshake as described in {{sec:cert}}. 
 CS generates the ClientHello.random with the freshness function as described in {{sec:random}}.
 If the handshake is certificate_request, CS generates the signature. 
 
-If the handshake is not post_hand_auth_proposed, CS SHOULD set tag.last_exchange to True.
-If the handshake is post_hand_auth_proposed, CS sets tag.last_exchange according to its policy. 
+
+CS sets tag.last_exchange and session_id as respectively detailed  in {{sec:tag}} and {{sec:session_id}}. 
 
 If tag.last_exchange is False, CS generates the client CertificateVerify and client Finished message, so further post handshake authentication can be handled.
 The generation of the Finished message requires the h_c to be computed key schedule as described in {{!RFC8445}} section 7.1. 
-Unless CS has the knowledge of the PSK to be used, CS takes psk as well as ephemeral to perform the key schedule.
+The PSK used in the key schedule is determine as follows by CS. If the CS has any out of band knowledge of the PSK to be used, CS SHOULD use that value and ignore the value provided by E. 
+If CS does not have  such knowledge, CS takes the value provided E. 
+A zero length PSK is considered as the default value as described in {{!RFC8446}} section 7.1. 
 
 
 ## c_post_hand_auth {#sec:c_post_hand_auth}
@@ -1215,7 +1252,7 @@ Note that (EC)DHE may be generated when ECDHE or PSK-ECDHE authentication is pro
 When the TLS client requests the generation of a (EC)DHE private key, the KeyShareClietHello MAY contain a list of KeyShareEntry (defined in section 4.2.8 {{!RFC8446}} ).
 When provided, these structures contains the group but are being stripped the key_exchange_value, while all other fields - including the lengths - are left unchanged.  
 When an error is found regarding the KeyShareClientHello, CS SHOULD raise an invalid_ephemeral error.
-Note that according to {{sec:ephemeral}} when the ephemeral_method is set to 'no_secret', the resulting list is empty. 
+Note that according to {{sec:ephemeral}} when the method is set to 'no_secret', the resulting list is empty. 
 
 This exchange is followed by a c_client_hello or a c_hand_and_app_secret.
 
@@ -1227,7 +1264,7 @@ struct{
 struct{
   uint32 session_id
   Freshness freshness 
-  Ephemeral ephemeral ephemeral_method=secret_generate or no_secret
+  Ephemeral ephemeral method=secret_generate or no_secret
   Handshake handshake<0..2^32> //RFC8446 section 4
   CPskID c_psk_id_list<0..2^8-1>
   uint16 secret_request;
@@ -1243,7 +1280,7 @@ struct{
 session_id, freshness and ephemeral, secret_request and secret_list are respectively defined in {{sec:session_id}}, {{sec:freshness}}, {{sec:ephemeral}}, {{sec:secret_request}} and {{sec:secret}}. 
 
 ephemeral
-: is defined in {{sec:ephemeral}}. With a single ClientHello or partial ClientHello, ephemeral_method is set to secret_generate when ECDHE and PSK-ECDHE authentication are being proposed or no_secret when only PSK is proposed or when the ECDHE is generated by the TLS client.  
+: is defined in {{sec:ephemeral}}. With a single ClientHello or partial ClientHello, method is set to secret_generate when ECDHE and PSK-ECDHE authentication are being proposed or no_secret when only PSK is proposed or when the ECDHE is generated by the TLS client.  
 Note that even though the CLientHello requests multiple KeyShareENtries, a single ephemeral method is provided. 
 
 handshake
@@ -1263,8 +1300,8 @@ The list is used by CS to build the OfferedPsks structure - including the PSKIde
 The list of identities in the OfferedPsks MUST be the same as the one of the c_psk_id_list.  
 
 ephemeral_list
-: When contains the different values of (EC)DHE public parts - i.e. the KeyShareEntries when the ephemeral_method is set to cs_generated. 
-When the ephemeral_method is set to no_secret, the list is an empty list by construction of the ephemeral structure (see {{sec:ephemeral}}).  
+: When contains the different values of (EC)DHE public parts - i.e. the KeyShareEntries when the method is set to cs_generated. 
+When the method is set to no_secret, the list is an empty list by construction of the ephemeral structure (see {{sec:ephemeral}}).  
 
 ## c_client_hello {#sec:c_client_hello}
 
@@ -1280,7 +1317,7 @@ This exchange is followed by a c_hand_and_app_secret.
 struct{
   uint32 session_id
   Freshness freshness 
-  Ephemeral ephemeral ephemeral_method=secret_generate or no_secret
+  Ephemeral ephemeral method=secret_generate or no_secret
   Handshake handshake<0..2^32> //RFC8446 section 4
   uint16 secret_request;
 }CClientHello
@@ -1348,7 +1385,7 @@ tag
 If the TLS client or the TLS server do not expect to perform session resumption or have not enabled post handshake authentication the tag.last_exchange SHOULD be set. 
 
 ephemeral
-: is defined in {{sec:ephemeral}}. Since ClientHello as already been sent, the purpose of the ephemeral is to provid ethe (EC)DHE shared secret to perform the key schedule and ephemeral_method MUST NOT be set to cs_generated.  
+: is defined in {{sec:ephemeral}}. Since ClientHello as already been sent, the purpose of the ephemeral is to provid ethe (EC)DHE shared secret to perform the key schedule and method MUST NOT be set to cs_generated.  
 
 handshake
 : is defined in {{sec:handshake}} and includes the ServerHello up to the server Finished. These messages are passed to CS encrypted.   
@@ -1494,7 +1531,7 @@ On the other hand the ECDHE private key and shared secret may be generated by th
 
 ### ecdhe generated on CS {#sec:ex:srv:cs_generated}
 
-When the (EC)DHE private key and shared secrets are generated by the CS, the LURK client set the ephemeral_method to cs_generated.
+When the (EC)DHE private key and shared secrets are generated by the CS, the LURK client set the method to cs_generated.
 The (EC)DHE group x25519 is specified in the handshake in the key_share extension. 
 In return CS provides the LURK client the public key so the TLS server can send the ServerHello to the TLS client. 
 
@@ -1509,7 +1546,7 @@ LURK client                              Cryptographic Service
     tag=last_exchange        -------->
     freshness = sha256
     ephemeral
-      ephemeral_method = cs_generated
+      method = cs_generated
     handshake = handshake (x25519)
     certificate = finger_print
     secret_request = h_s, h_c, a_s, and a_c
@@ -1528,7 +1565,7 @@ LURK client                              Cryptographic Service
 ### ecdhe generated by the TLS server {#sec:ex:srv:tls_server_generated}
 
 When the (EC)DHE private keys and the shared secrets are generated by the TLS server, the LURK client provides the shared secret to CS as only the shared secret is necessary to generated the signature. 
-This is indicated by the ephemeral_method set to e_generated.
+This is indicated by the method set to e_generated.
 No (EC)DHE values are returned by CS as these have already been generated by the TLS server. 
 However, the TLS server has all the necessary material to generate the secrets and the only information that CS owns and that is not known to et TLS server is the private key (associated to the certificate) used to generate the signature. 
 This means that is session resumption were allowed, since it is based on PSK authentication derived from the resumption secret, these sessions could be authenticated by the TLS server without any implication from the CS. 
@@ -1545,7 +1582,7 @@ LURK client                              Cryptographic Service
     tag.last_exchange=True   -------->
     freshness = sha256
     ephemeral
-      ephemeral_method = e_generated
+      method = e_generated
       key
         group = x25519
         shared_secret = shared_secret
@@ -1582,7 +1619,7 @@ LURK client                              Cryptographic Service
     session_id = session_id_tls_server    -------->
     freshness = sha256
     ephemeral
-      ephemeral_method = cs_generated
+      method = cs_generated
     handshake = handshake (x25519)
     certificate = finger_print
     secret_request = h_s, h_c, a_s, a_c
@@ -1705,7 +1742,7 @@ These secrets are requested via an s_hand_and_app_secret LURK exchange.
 The SHandAndAppSecretRequest structure carries a tag with its last_exchange set to False to indicate the willingness of the TLS server to keep the session open and proceed to further LURK exchanges. 
 In our case, this could mean the TLS server expects to request additional tickets. 
 The session_id is set to session_id_cs, the value provided by the CS. 
-ephemeral is in our case set the ephemeral_method to cs_generated as described in  {{sec:ex:srv:ecdhe}}.
+ephemeral is in our case set the method to cs_generated as described in  {{sec:ex:srv:ecdhe}}.
 The method (x25519) to generate the (EC)DHE is indicated in the handshake. 
 The necessary handshake to derive the handshake and application secrets, as well the requested secrets are indicated in the secret_request structure.
 
@@ -1721,7 +1758,7 @@ LURK client                              Cryptographic Service
     tag.last_exchange = False
     session_id = session_id_cs
     ephemeral
-      ephemeral_method = cs_generated
+      method = cs_generated
     handshake = ServerHello(x25519) ... EncryptedExtensions
     secret_request = h_c, h_s, a_c, a_s -------> 
                                    SHandAndAppResponse
@@ -1782,7 +1819,7 @@ LURK client                              Cryptographic Service
     session_id = session_id_tls_client
     freshness = sha256
     ephemeral
-      ephemeral_method = cs_generated
+      method = cs_generated
     handshake = ClientHello(x25519, x488, ... )
     c_psk_id_list = []
     secret_request = []    ------>    
@@ -1792,7 +1829,7 @@ LURK client                              Cryptographic Service
                                        key
                                          group = x25519, 
                                          key_exchange = public_key
-                                       ephemeral_method = cs_generated
+                                       method = cs_generated
                                        key
                                          group = x488, 
                                          key_exchange = public_key
@@ -1808,7 +1845,7 @@ The secrets are requested via a c_hand_and_app_secret.
 We assume the TLS client supports session resumption so, the tag.last_exchange is unset.  
 The session_id takes the value advertises by each party during the previous c_init_client_hello exchange. 
 Since CS already has the (EC)DHE private keys, it will be able to derive the (EC)DHE shared secret and no information needs to be provided by the TLS client. 
-As a result, ephemeral_method is set to no_secret. 
+As a result, method is set to no_secret. 
 The handshake is composed of the messages sent by the TLS server.
 As the TLS client does not have yet the messages are not decrypted, and are provided encrypted. 
 The requested secrets are the handshake and application secrets. 
@@ -1829,7 +1866,7 @@ LURK client                              Cryptographic Service
     tag.last_exchange=False
     session_id=session_id_cs
     ephemeral
-      ephemeral_method = no_secret
+      method = no_secret
     handshake = ServerHello, {EncryptedExtensions}...,{Finished}. 
     secret_request = h_c, h_s, a_c, a_s -------> 
                                    CHandAndAppSecretResponse       
@@ -1876,7 +1913,7 @@ The scenario described in this section presents a number of similarities to the 
 As such, we expect the reader to be familiar with {{sec:ex:clt:unauth:ecdhe}} and will highlight the differences with {{sec:ex:clt:unauth:ecdhe}} to avoid to repeat the description. 
 
 In this section, the PSK is protected by the CS, but the (EC)DHE private keys are generated by the TLS client and as such are considered as unprotected. 
-As the (EC)DHE secret are generated by the TLS client, the ephemeral_method is set to no_secret, and the key_share extension is fully provided in the ClientHello.
+As the (EC)DHE secret are generated by the TLS client, the method is set to no_secret, and the key_share extension is fully provided in the ClientHello.
 However, the ClientHello do not carry the PreSharedKeyExtension. 
 Instead, this extension is built from the NewSessionTicket identifier nst_id provided in our case from a previous c_register_ticktes exchange (see {{sec:ex:clt:unauth:ecdhe}} }. 
 The TLS client requests the binder_key associated to nst_id in order to be able to complete the binders. 
@@ -1891,7 +1928,7 @@ LURK client                              Cryptographic Service
     session_id = session_id_tls_client
     freshness = sha256
     ephemeral
-      ephemeral_method = no_secret
+      method = no_secret
     handshake = ClientHello without PreSharedKeyExtension
     c_psk_id_list = [nst_id]
     secret_request = [b]    ------>    
@@ -1911,7 +1948,7 @@ LURK client                              Cryptographic Service
     tag.last_exchange=False
     session_id=session_id_cs
     ephemeral
-      ephemeral_method = e_generated
+      method = e_generated
       shared_secret
     handshake = ServerHello, {EncryptedExtensions}...,{Finished}. 
     secret_request = h_c, h_s, a_c, a_s -------> 
@@ -1970,7 +2007,7 @@ LURK client                              Cryptographic Service
     tag.last_exchange=False
     session_id=session_id_cs
     ephemeral
-      ephemeral_method = e_generated
+      method = e_generated
       shared_secret
     handshake = ServerHello, {EncryptedExtensions}...,{Finished}. 
     secret_request = h_c, h_s, a_c, a_s -------> 
@@ -1999,7 +2036,7 @@ The TLS client does not need to interact with CS to build its ClientHello.
 Similarly, as the (EC)DHE private part have been generated by the TLS client, the TLS client is able to perform the key schedule and derive the necessary keys to decrypt the encrypted response from the TLS server. 
 Upon receiving a CertificateRequest, the TLS client requests CS to generate the signature needed to send the CertificateVerify.  
 The exchange is very similar as the one s_init_cert_verify (see {{sec:ex:srv:tls_server_generated}}). 
-As the (EC)DHE shared secret is generated by the TLS client, the ephemeral_method is necessarily set to e_generated. 
+As the (EC)DHE shared secret is generated by the TLS client, the method is necessarily set to e_generated. 
 The handshake is set to the ClientHello ... server Finished, and the certificate carries the reference to the TLS client certificate, so CS picks the appropriated private key. 
 sig_algo designates the signature algorithm. 
 
@@ -2010,7 +2047,7 @@ LURK client                              Cryptographic Service
     tag.last_exchange=True   -------->
     freshness = sha256
     ephemeral
-      ephemeral_method = e_generated
+      method = e_generated
       key
         group = x25519
         shared_secret = shared_secret
@@ -2043,7 +2080,7 @@ This situation describes the case where the TLS client has performed the TLS han
 As a result, if involved PSK, (EC)DHE shared secrets are unprotected and hosted by the TLS client. 
 Upon receiving a CertificateRequest, the TLS client sends session_id and freshness to initiate the LURK session. 
 tag.last_exchange is set in order to accept future post handshake authentication request. 
-ephemeral_method is set to secret_provide as CS is unable to generate the (EC)DHE shared secret. 
+method is set to secret_provide as CS is unable to generate the (EC)DHE shared secret. 
 handshake is set to the full handshake including the just received CertificateRequest message. 
 The certificate represents the TLS client certificate to determine the private key involved in computing the signature. 
 sig_algo specifies the signature algorithm. 
@@ -2056,7 +2093,7 @@ LURK client                              Cryptographic Service
     session_id = session_id_tls_client
     freshness = sha256
     ephemeral
-      ephemeral_method = e_generated
+      method = e_generated
     handshake = ClientHello ... client Finished CertificateRequest
     certificate
       certificate_type = finger_print
