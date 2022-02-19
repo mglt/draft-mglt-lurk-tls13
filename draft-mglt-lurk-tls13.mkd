@@ -43,6 +43,10 @@ TODO:
 * CS MUST check the certificate is supported by the client. 
 * There is no need to specify the certificate_contex in the Cert (finger_print) as it is known from the CertificateRequest for the client and has a fix value for the server. 
 * session_id  -> the presence or absence is determined by tag.last_exchange of the request!
+
+* psk -> the hash function needs to be defined to start the schduler 
+* Extension structure is used both for LURK and TLS.
+
 --- middle
 
 
@@ -236,32 +240,29 @@ Handshake handshake<0..2^32> //RFC8446 section 4 (clear)
 Table {{table:handshake}} defines the content of the handshake parameter in the various exchanges. 
 
 ~~~
-+-----------------------+------------------------------------------+
-| LURK exchange         | handshake content                        |
-+-----------------------+------------------------------------------+
-| s_init_cert_verify    | ClientHello ... later of                 |
-|                       | server EncryptedExtensions /             |
-|                       | CertificateRequest                       |
-| s_new_ticket          | earlier of client CertificateVerify /    |
-|                       | Finished ... Finished                    |
-| s_init_early_secret   | ClientHello                              |
-| s_hand_and_app_secret | ServerHello ... later of                 |
-|                       | server EncryptedExtensions /             |
-|                       | CertificateRequest                       |
-| c_init_post_hand_auth | ClientHello ... ServerHello              |
-|                       | CertificateRequest                       |
-| c_post_hand_auth      | CertificateRequest                       |
-| c_init_cert_verify    | ClientHello... later of server Finished/ |
-|                       | EndOfEarlyData                           |
-| c_init_client_hello   | (Partial) ClientHello  or                |
-|                       | ClientHello, HelloRetryRequest,          |
-|                       | (Partial) ClientHello                    |
-| c_client_hello        | HelloRetryRequest, (Partial) ClientHello |
-| c_hand_and_app_secret | ServerHello, {EncryptedExtensions}       |
-|                       | ... later of { server Finished } /       |
-|                       | EndOfEarlyData                           |
-| c_register_tickets    | -                                        |
-+-----------------------+------------------------------------------+
++------------------------+------------------------------------------+
+| LURK exchange          | handshake content                        |
++------------------------+------------------------------------------+
+| s_init_cert_verify     | ClientHello ... later of                 |
+|                        | server EncryptedExtensions /             |
+|                        | CertificateRequest                       |
+| s_new_ticket           | earlier of client CertificateVerify /    |
+|                        | Finished ... Finished                    |
+| s_init_early_secret    | ClientHello                              |
+| s_hand_and_app_secret  | ServerHello ... later of                 |
+|                        | server EncryptedExtensions /             |
+|                        | CertificateRequest                       |
+| c_init_client_finished | ClientHello... later of server Finished/ |
+|                        | EndOfEarlyData                           |
+| c_post_hand_auth       | CertificateRequest                       |
+| c_init_client_hello    | PartialClientHello  or ClientHello       |
+|                        | HelloRetryRequest, PartialClientHello    |
+| c_client_hello         | HelloRetryRequest, (Partial) ClientHello |
+| c_hand_and_app_secret  | ServerHello, {EncryptedExtensions}       |
+|                        | ... later of { server Finished } /       |
+|                        | EndOfEarlyData                           |
+| c_register_tickets     | -                                        |
++------------------------+------------------------------------------+
 ~~~
 {: #table:handshake title="handshake values per LURK exchange" }
 
@@ -358,6 +359,29 @@ This exchange occurs when the TLS client is authenticated via its certificate af
 The CS MUST check E has indicated support of the post handshake client authentication. 
 This is enforced by checking the TLS handshake is post_hand_auth_proposed.
 c_post_hand_auth handshake is composed of the CertificateRequest message. 
+
+
+### c_init_client_hello
+
+The c_init_client_hello message carries a partial client hello that corresponds to a ClientHello message to which the pre_shared_key and key_share extensions have been modified.   
+
+The TLS client may propose PSK based authentication, in which case the  PreSharedKeyExtension is present. 
+The partial ClientHello omits the  PskBinderEntry and the OfferedPsks is replaced OfferedPsksWithNoBinders as detailed below:
+
+~~~
+struct{
+    PskIdentity identities<7..2^16-1>;
+}OfferedPsksWithNoBinders;
+
+~~~
+
+This extension MUST be present when the handshake is_psk_proposed absent otherwise. 
+If these conditions are not met, CS SHOULD raise a 'invalid_handshake' error.
+
+In addition the ClientHello may also have its KeyShare replaced by KeyShareClientHelloEmpty as detailed in {{sec:ephemeral}}.
+
+
+
 
 
 ## session_id {#sec:session_id}
@@ -501,15 +525,38 @@ Upon receiving the shared_secret, CS MUST check group is proposed in the KeyShar
 
 ### cs_generated:
 
-When the ECDHE public/private keys are generated by the CS, E requests CS the associated public value. 
+On the TLS server side, when the ECDHE public/private keys are generated by the CS, E requests CS the associated public value. 
 Note that in such cases CS would receive an incomplete Handshake Context from E with the public part of the ECDHE missing. 
-Typically the ServerHello message would present a KeyShareServerHello that consists of a KeyShareEntry with an empty key_exchange field, but the field group is present.  
+Typically the ServerHello message would replace the KeyShareServerHello structure by an EmptyKeyShareEntry structure. 
+The EmptyKeyShareEntry differs from KeyShareServerHello as its KeyShareEntry has a zero length key_exchange field, but the field group is present.
+~~~
+struct { 
+  NamedGroup group;
+  int16 key_exchange=0
+} EmptyKeyShareEntry
+~~~
 
 CS MUST check the group field in the KeyShareServerHello, and get the public value of the TLS client from the KeyShareClientHello. 
 CS performs the same checks as described  in {{RFC8446}} section 4.2.8. 
 CS generates the private and public (EC)DH keys, computes the shared key and return the KeyShareEntry server_share structure defined in {{RFC8446}} section section 4.2.8 to the LURK client.
 
 Note: The use of an empty KeyShareEntry results in the length of the ServerHello, the ServerHello.extensions and the KeyShareServerHello sent by E to CS to be increases to the size of the coordinate length of the chosen group before being added to the Handshake context of CS or being sent to the TLS client by the E.
+
+
+The TLS client side, may proposed multiple KeyShareEntry, as a result, E may request CS to generate multiple KeyShareEntry. 
+As a result, when (EC)DHE are generated by CS, the ClientHello replaces the KeyShare structure by a KeyShareClientHelloEmpty structure. 
+This structure replaces the KeyShareClientHello.client_shares defined in {{!RFC8446}} section 4.2.8 by a list of EmptyKeyShareEntry. 
+The structures are defines below:
+
+~~~
+struct {
+    EmptyKeyShareEntry client_shares<0..2^16-1>
+} KeyShareClientHelloEmpty; 
+~~~
+
+As a result, the partial ClientHello may have a key_share extension that is either a KeyShareClientHello or a KeyShareClientHelloEmpty structure.
+
+
 
 ### no_secret
 
@@ -1205,7 +1252,6 @@ struct{
   uint32 session_id
   Handshake handshake<0..2^32> // CertificateRequest
   Cert client_certificate;
-  SignatureScheme sig_algo;
 }CPostHandAuthRequest
 
 
@@ -1221,87 +1267,63 @@ session_id is set to the negotiated session_id provided by the CS for its inboun
 
 Upon receiving a CPostHandAuthRequest, CS checks the handshake is post_hand_auth_proposed as described in {{sec:handshake}} and SHOULD return an 'invalid_handshake' error otherwise.
 If the CS permits a limited number of post handshake client authentication, and that limit has been reached, it SHOULD raise an 'invalid_type' error.
-Note that in some cases, such as with a c_cert_verify exchange, CS SHOULD resets the session, if post handshake is not supported which result in the session not being found. 
 CS MUST check client_certificate.cert_type is not set to 'no_certificate', the provided certificate is known to CS. 
-The certificate is eventually decompressed and added to the handshake context as described in {{sec:cert}}. 
+The certificate is decompressed and added to the handshake context as described in {{sec:cert}}. 
 Note also that for the client, the Certificate includes the certificate_request_context provided by the CertificateRequest message as described in {{!RFC8446}} section .
 The signature is computed as detailed in {{!RFC8446}} section 4.4. 
 CS MAY have a limit of permitted number of post handshake, and set tag.last_exchange to True when that limit is reached. 
 
 ## c_init_client_hello {#sec:c_init_client_hello}
 
-The c_init_ephemeral_binder exchange occurs when the  TLS client needs to generate the ClientHello as well as the early secrets.  
-In fact the generation of the ClientHello may require CS to generates the (EC)DHE  private key and returns the public part as well as the binder_key to generate the binders. 
-On the other hand, the generation of the early secrets requires the ClientHello to be completed. 
-As a result, CS will be expected to complete the ClientHello from a potential partial ClientHello. 
-More specifically, when binders are needed, the partial Client Hello does not contains the OfferedPsks structure, that is the PreSharedKeyExtension.  
-The latter structure is simply stripped from the ClientHello, without any further changes, such as changing the lengths for example.  
-It is entirely built by CS and append as the last extension as described in section 4.2.11 of {{!RFC8446}}. 
-Note that extension_type as well as the 16 bit length of the OfferedPsks remain present.
-The PreSharedKeyExtension structure of the ClientHello is built from a list of CPskIDs where each CPskID designates a PSK with an identifier managed by CS of the TLS client. 
-The PSK can be associated to a NewSessionTicket in which case the CPskID will be used to designate the NewSessionTicket and its associate identity structure.  
-The reason for having CPskID as opposed to the identity structure is that nothing prevent identities of two different NewSessionTickets to be collide. 
-CPskID are managed by CS of the TLS client to prevent such collisions and are provided during the registration of the NewSessionTickets c_register_tickets (see {{sec:c_register_tickets}}). 
-When the PSK is provisioned, the TLS client needs to be configured with it. 
-When CS is not able to generate the PreSharedKeyExtension an invalid_identity error SHOULD be raised. 
 
-Note that when PSK is not proposed or when PSK are not registered in the CS, the ClientHello is fully provided -  without the PreSharedKeyExtension or with a completed PreSharedKeyExtension extension. 
-CS is expected to be able to distinguish between the two by for example, comparing the length of the handshake provided in c_init_client_hello and the length indicated in the ClientHello. 
+The c_init_client_hello occurs when E requires tCS to provide some information to complete the ClientHello. 
+This occurs when the CS is generating the (EC)DHE private key as well as when CS protects the PSK and needs the binder key to generate the binders. 
 
-Note that (EC)DHE may be generated when ECDHE or PSK-ECDHE authentication is proposed by the TLS client, while early secrets and binder_key can only be requested when PSK is proposed. 
-When the TLS client requests the generation of a (EC)DHE private key, the KeyShareClietHello MAY contain a list of KeyShareEntry (defined in section 4.2.8 {{!RFC8446}} ).
-When provided, these structures contains the group but are being stripped the key_exchange_value, while all other fields - including the lengths - are left unchanged.  
-When an error is found regarding the KeyShareClientHello, CS SHOULD raise an invalid_ephemeral error.
-Note that according to {{sec:ephemeral}} when the method is set to 'no_secret', the resulting list is empty. 
-
-This exchange is followed by a c_client_hello or a c_hand_and_app_secret.
+The CInitClientHelloRequest and CInitClientHelloResponse are detailed below:
 
 ~~~
 struct{
-  uint32 c_psk_id 
-}CPskID
-
-struct{
   uint32 session_id
-  Freshness freshness 
-  Ephemeral ephemeral method=secret_generate or no_secret
   Handshake handshake<0..2^32> //RFC8446 section 4
-  CPskID c_psk_id_list<0..2^8-1>
-  uint16 secret_request;
-}CInitClientHello
+  Freshness freshness
+  int8 psk_index_list<0..2^8>
+  int16 pre_share_key_len
+}CInitClientHelloRequest
 
 struct{
   uint32 session_id
   Ephemeral ephemeral_list<0..2^16-1>
   Secret secret_list<0..2^16-1>;
-}CInitClientHello
+}CInitClientHelloResponse
 ~~~
 
-session_id, freshness and ephemeral, secret_request and secret_list are respectively defined in {{sec:session_id}}, {{sec:freshness}}, {{sec:ephemeral}}, {{sec:secret_request}} and {{sec:secret}}. 
 
-ephemeral
-: is defined in {{sec:ephemeral}}. With a single ClientHello or partial ClientHello, method is set to secret_generate when ECDHE and PSK-ECDHE authentication are being proposed or no_secret when only PSK is proposed or when the ECDHE is generated by the TLS client.  
-Note that even though the CLientHello requests multiple KeyShareENtries, a single ephemeral method is provided. 
+E generates the ClientHello.random as described in {{sec:freshness}}.  
+If E requires CS to generate (EC)DHE private keys, E replaces the KeyShare structure by the KeyShareClientHelloEmpty structure as described in {{sec:ephemeral}}. 
+If E requires the binder_key, E replaces the OfferedPsk structure by the OfferedPsksWithNoBinders defined {{sec:handsahke}}. 
+The structure contains the PSK identities the TLS client intend to propose the TLS server. 
+These identities may combine a set of PSK protected by CS or not. 
+The PSK for which E expect the CS to provide the binder_key are indicated in the psk_index_list. 
+The psk_index_list contains the identities indexes from which CS is expected to provide th ebinder key. 
+psk_index_list orders the index in an increasing order.
+E indicates the length of the pre_share_key extension, that is the expected length once the binders are completed. 
+The value does not include the size of the length and is the one expected to be found in the final ClientHello. 
+At last CS places the resulting PartialClientHello structure in the handshake
 
-handshake
-: is defined in {{sec:handshake}}. When a partial ClientHello is provided, PSK or PSK-ECDHE MUST be enabled. 
-When a ClientHello is provided, PSK or PSK-ECDHE may be proposed but with unprotected keys. 
-ClientHello, HelloRetryRequest, ClientHello or ClientHello, HelloRetryRequest, partial ClientHello MAY be provided. 
-However, there are cases this is not possible, typically when the HellRequestRetry does not contain a key_share extension, the (EC)DHE shared secret is generated with the (EC)DHE generated associated to the first ClientHello. 
-When the (EC)DHE private key has been generated by the CS, the TLS client MUST use a c_early_secret LURK exchange as defined in {{sec:c_client_hello}} in order to ensure CS is aware of the (EC)DHE shared secret to generate the further secrets.   
+Upon receiving a CInitClientHello, CS proceeds to the the session_id negotiation and provides its inbound session_id as detailed in {{sec:session_id}}. 
+CS takes the handshake message, update the ClientHello.random as described in {{sec:freshness}}. 
+The CS looks for the KeyShareClientHelloEmpty structure. 
+For each EmptyKeyShareEntry CS generates the requested (EC)DHE keys and replace the structure by a  KeyShare structure. 
+The generated KeyShare entries are returned as an ephemeral structure to E via the ephemeral_list.
+If CS is unable to generate anephemeral of if the number of ephemeral values to generate is too high, a 'invalid_ephemeral' error SHOULD be raised.
 
-c_psk_id
-: designate an 32 bit identifier for a PSK. 
-This identifier is provided and managed by CS of the TLS client to avoid collision of different PSK provided by different TLS servers. 
+CS builds the partial ClientHello as defined in  {{!RFC8446}} section 4.2.11, that is, it includes all of the ClientHello but not the binders list itself.  The length fields for the message (including the overall length, the length of the extensions block, and the length of the "pre_shared_key" extension) are all set as if binders of the correct lengths were present.
 
-c_psk_id_list
-: designates the list of CPskIDs. 
-The list is used by CS to build the OfferedPsks structure - including the PSKIdentity structure. 
-The list of identities in the OfferedPsks MUST be the same as the one of the c_psk_id_list.  
+With that ClientHello, CS generates all binder keys requested by E, that is indicated by the psk_index_list. 
+These binder keys are returned in that exact same order in secret_list.   
+If an error occurs, CS SHOULD raise an 'invalid_psk' error.
 
-ephemeral_list
-: When contains the different values of (EC)DHE public parts - i.e. the KeyShareEntries when the method is set to cs_generated. 
-When the method is set to no_secret, the list is an empty list by construction of the ephemeral structure (see {{sec:ephemeral}}).  
+Upon receiving the CInitClientHelloResponse, E generates the key_share and pre_shared_key extension before sending the ClientHello to the TLS server.   
 
 ## c_client_hello {#sec:c_client_hello}
 
