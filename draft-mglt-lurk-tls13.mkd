@@ -180,6 +180,9 @@ The same structure is used across multiple exchanges, but each exchange only per
 For a given exchange, values or secrets that are not permitted MUST NOT be requested by E and MUST be ignored by the CS.
 The secret request sent by  E expresses a willingness for a given set of secrets. CS SHOULD provide the requested secrets, its response may implement specific policies and CS MAY omit some requested permitted secrets as well as add some permitted secrets.
 
+Note that for the c_init_client_hello, CS MUST provide binder_keys the binder_key_list and MUST omit binder_key in the secret_list (see {{sec:c_init_client_hello}}).
+
+
 ~~~
 +------+-------------------------------------------+
 | Bit  |      key or secret     (designation)      |
@@ -208,8 +211,7 @@ The secret request sent by  E expresses a willingness for a given set of secrets
 | s_hand_and_app_secret  | h_c, h_s, a_c, a_s, x | 
 | c_init_client_finished | -                     |
 | c_post_hand_auth       | -                     |
-| c_init_client_hello    | b, e_c, e_x           | 
-| c_client_hello         | b, e_c, e_x           | 
+| c_init_client_hello    | e_c, e_x              | 
 | c_server_hello         | h_c, h_s,             | 
 | c_client_finished      | a_c, a_s, r           | 
 | c_register_tickets     | -                     |
@@ -256,8 +258,10 @@ Table {{table:handshake}} defines the content of the handshake parameter in the 
 | c_init_client_hello    | PartialClientHello  or ClientHello       |
 |                        | HelloRetryRequest, PartialClientHello    |
 | c_server_hello         | ServerHello                              |
-| c_client_finished      | {EncryptedExtensions} ... later of       |
-|                        | { server Finished } EndOfEarlyData       |
+| c_client_finished      | EncryptedExtensions ... later of         |
+|                        | server Finished, EndOfEarlyData    OR    |
+|                        | ServerHello, EncryptedExtensions ...     |
+|                        | later of server Finished, EndOfEarlyData |
 | c_register_tickets     | -                                        |
 +------------------------+------------------------------------------+
 ~~~
@@ -381,6 +385,18 @@ In addition the ClientHello may also have its KeyShare replaced by PartialKeySha
 
 The CS MUST check the handshake is ks_proposed or psk_proposed.
 
+### c_server_hello
+
+There is no particular conditions to be met by the handshake.
+
+### c_client_finished
+
+The c_client_finished exchange considers two types of handshake messages. 
+Either the handshake message starts with a EncryptedExtensions message when the exchange follows a c_server_hello exchange. 
+This situation corresponds to the case where E c_client_finished follows a c_server_hello. 
+Otherwise the handshake starts with a ServerHello message. This situation corresponds to the case where E c_client_finished follows a c_init_client_hello exchange.
+
+In both cases, Certificate message are not part of the handshake and are instead carried by the Cert structure (see {{sec:cert}}).
 
 ## session_id {#sec:session_id}
 
@@ -1154,11 +1170,11 @@ ClientHello    ^ method is 'cs_generated' no
   Derivation   | or PSK in CS Proposed --------------+           
 ClientHello    |     yes |                           |
   sent      -->v  c_init_client_hello                |
-ServerHello -->^         |              certificate_request or   no
-  received     |  c_server_hello        post_hand_auth_proposed ---+
-               |         |                       yes |             |
-ServerHello    |  c_client_finished        c_init_client_finished  |
-  Treatment    |         |                           |             |
+ServerHello -->^         |        |      certificate_request or   no
+  received     |  c_server_hello (a)     post_hand_auth_proposed ---+
+               |         |        |               yes |             |
+ServerHello    |  c_client_finished         c_init_client_finished  |
+  Treatment    |         |                            |             |
 clientFinished |         +---------+-----------------+     no CS protection
   sent      -->v                   |                       provided  
                ^                   |                          
@@ -1178,6 +1194,8 @@ Treatment      ||        |                      |
                                  |           
                             LURK session     
                             closed           
+
+(a) ( method is 'e_generated' or 'no_secret')  and chosen PSK not in CS
 ~~~
 {: #fig:state:tls_client:clt title="LURK client State Diagram" }
 
@@ -1348,8 +1366,9 @@ The computed binder_keys are returned in the binder_key_list following the exact
 Once all binder_keys have been generated, CS generates the binders, which requires a partial ClientHello and a binder_key.
 The binders are integrated to the resulting ClientHello. 
 
-With the ClientHello, early secrets are generated and returned as described in {{sec:secret_request}}.
+With the ClientHello, early secrets are generated and returned as described in {{sec:secret_request}}. 
 
+Note that the binder key MUST be part of the binder_key_list and MUST Be omitted in the secret_list.
 
 ## c_server_hello {#sec:c_server_hello}
 
@@ -1381,6 +1400,13 @@ Otherwise, E evaluates the KeyShareEntry selected by the TLS server, that is the
 If the corresponding (EC)DHE private key has been generated by E, E generates the shared key and provide it via an EphemeralRequest structure with a method set to 'e_generated'. 
 If the corresponding (EC)DHE private key has been generated by CS, E sends an EphemeralRequest with a method set to 'cs_generated'.
 
+Note that the handling enables the use of a combination of PSKs hosted by CS and PSK hosted by E. 
+The implication of a PSK hosted by the CS requires a c_init_client_hello exchange. 
+However, the TLS server may select a PSK hosted by E. 
+When in addition the authentication is using PSK without (EC)DHE or when the (EC)DHE has been generated by E, E is able to generate the handshake, the application and resumption secrets.
+The only remaining interaction between E and CS in the client authentication and these interactions happens during the c_client_finished. 
+In this case E MUST directly perform a c_client_finished exchange.
+
 Upon receiving an CServerHelloRequest, CS checks the method is aligned with the TLS handshake. 
 When the TLS server is authenticated with a certificate, CS initiates the key schedule, otherwise CS continue with the key schedule initialized during the c_init_client_hello and generates the handshake secrets.
 
@@ -1389,17 +1415,14 @@ Upon receiving a CServerHelloResponse, E decrypt the encrypted messages and proc
 ## c_client_finished {#c_client_finished}
 
 The computation of the application and resumption secret are performed as described in {{sec:c_init_client_finished}}. 
-The only difference is that the key scheduler has already been initialized. 
+The only difference is that the key scheduler has already been initialized when it follows a c_server_hello exchange. 
 
 The CClientFinishedRequest and CClientFinishedResponse are detailed below:
 
 ~~~
 struct{
     uint8 tag;
-    select (tag.last_exchange){
-      case False:
-        uint32 session_id;
-    }
+    uint32 session_id;
     Handshake handshake<0..2^32>; //RFC8446 section 4
     Cert server_certificate; 
     Cert client_certificate 
@@ -1407,104 +1430,22 @@ struct{
 
 struct{
     uint8 tag;
-    select (tag.last_exchange){
-      case False:
-        uint32 session_id;
-    }
+    uint32 session_id;
     Signature signature;
 }CClientFinishedResponse
 ~~~
 
+E performs a c_client_finished exchange either after a c_server_hello exchange or after a c_init_client_hello exchange. 
+As described in {{sec:c_server_hello}} E performs a c_server_hello to retrieve the handshake secrets necessary to decrypt the encrypted messages of the handshake.
 
-## c_client_hello {#sec:c_client_hello}
+When E has access of the optional PSK and optional (EC)DHE values - or these values are not needed, than E SHOULD compute the secret without any interactions with CS. 
+As a result, interaction with CS are restricted to the generation of the signature. 
+Assuming PK is protected by the CS, E performs a  c_client_finished either when the TLS server requests the TLS client to authenticate (with a CertificateRequest) or if the TLS client has enabled post handshake client authentication. 
+In this case, CS MUST NOT regenerate resumption secret and MUST sets its last_exchange to True unless post authentication is enabled. 
+In this case handshake starts with a ServerHello message.
 
-The c_client_hello exchange occurs after a TLS server responds to a ClientHello generated using a c_init_client_hello defined in {{sec:c_init_client_hello}} is being responded a HelloRetryRequest by the TLS server.
-While in some cases, re-initiating a LURK exchange with a _init_client_hello MAY be considered, this document RECOMMENDS to proceed as follows when a HelloRetryRequest is received:
-
-* If the first ClientHello has been generated via a c_init_client_hello, use c_client_hello to generate the second ClientHello
-* If the first ClientHello has not been generated via a c_init_client_hello, consider generating the second ClientHello via c_init_client_hello.
-
-This exchange is followed by a c_hand_and_app_secret.
-
-~~~
-struct{
-  uint32 session_id
-  Freshness freshness 
-  Ephemeral ephemeral method=secret_generate or no_secret
-  Handshake handshake<0..2^32> //RFC8446 section 4
-  uint16 secret_request;
-}CClientHello
-
-struct{
-  uint32 session_id
-  Ephemeral ephemeral
-  Secret secret_list<0..2^16-1>;
-}CClientHello
-~~~
-
-session_id, ephemeral, secret_request and secret_list are respectively defined in {{sec:session_id}}, {{sec:ephemeral}}, {{sec:secret_request}} and {{sec:secret}}. 
-
-handshake
-: is defined in {{sec:handshake}}. 
-The handshake MUST contain a HelloRetryRequest and a ClientHello or partial ClientHello. 
-The same restrictions as defined in {{sec:c_init_client_hello}} apply to the ClientHello 
-
-
-## c_hand_and_app_secret {#sec:c_hand_and_app_secret}
-
-The c_hand_and_app_secret exchange occurs after a ServerHello is received and the TLS client request handshake secrets to decrypt (resp. encrypt) handshake messages sent by (resp. to) the server.  
-Similarly the TLS client requests application secrets used to protect the TLS session as well as other secrets such as exporter secrets. 
-
-Upon receiption of the handshake CS derives the handshake secrets and the server_handshake_traffic_secret as described in {{!RFC8446}} section 7.3 to decrypt the encrypted messages.
-The presence of a CertificateRequest indicates the TLS server expects the TLS client to authenticate via a CertificateVerify message. 
-If CS protects a private key associated to the TLS client, CS MUST provides the necessary information to the TLS client client. 
-Otherwise, the CertificateRequest is ignored by the CS. 
-
-When CS generates the signature, the presence of the certificate, the signature and sig_algo is indicated by setting tag.cert_request. 
-Unlike on the TLS server, where the TLS server indicates the certificate to chose  as well as the signature scheme to select, on the TLS client, such decision is left to the CS. 
-The choice of the signature algorithm and certificate is performed by CS as described in {{!RFC8446}} section 4.4.2.3.    
-When resumption_master_secret is requested by the TLS client, or when further exchanges between teh TLS client and CS are expected, CS generates the CertificateVerify and Finished message to synchronize the TLS handshake context. 
-The Certificate, respectively CertificateVerify and Finished message are generated as described in {{!RFC8446}} section 4.4.2, section 4.4.3, and section 4.4.4. 
-
-This exchange is followed by a c_post_hand_auth, c_register_ticket exchange.  
-
-~~~
-struct{
-  uint8 tag;
-  uint32 session_id;
-  Ephemeral ephemeral; 
-  Handshake handshake<0..2^32>; //RFC8446 section 4
-  uint16 secret_request;
-}CHandAndAppSecretRequest
-
-struct{
-  uint8 tag;
-  uint32 session_id;
-  Secret secret_list<0..2^16-1>;
-  select( tag.cert_request){
-    case true: 
-      LURKTLS13Certificate certificate;
-      SignatureScheme sig_algo;  
-      Signature signature;
-  } 
-}CHandAndAppSecretRequest
-
-~~~
-
-session_id, secret_request certificate signature, and secret_list are respectively described in {{sec:session_id}}, {{sec:secret_request}}, {{sec:cert}}, {{sec:sig}} and {{sec:secret}} 
-
-tag
-: is defined in {{sec:tag}} and indicates whether the further exchanges are expected or not. 
-If the TLS client or the TLS server do not expect to perform session resumption or have not enabled post handshake authentication the tag.last_exchange SHOULD be set. 
-
-ephemeral
-: is defined in {{sec:ephemeral}}. Since ClientHello as already been sent, the purpose of the ephemeral is to provid ethe (EC)DHE shared secret to perform the key schedule and method MUST NOT be set to cs_generated.  
-
-handshake
-: is defined in {{sec:handshake}} and includes the ServerHello up to the server Finished. These messages are passed to CS encrypted.   
-
-sig_algo
-: is defined in {{sec:sig}} and defines the algorithm chosen by the CS. 
+Upon receiving a CClientFinishedRequest, CS generates the handshake context as in a c_init_client_finished exchange (see {{sec:c_init_client_finished}}) and generates the signature. 
+More specifically, it generates and insert the server and client Certificate from the server_certificate and client_certificate structures.
 
 ## c_register_tickets {#sec:c_register_tickets}
 
@@ -1523,13 +1464,12 @@ struct {
   uint8 tag
   uint32 session_id
   NewSessionTicket ticket_list<0..2^16-1>; //RFC8446 section 4.6.1.
-} RegisterTicketsRequest;
+} CRegisterTicketsRequest;
 
 struct {
   uint8 tag
   uint32 session_id
-  CPskID c_spk_id_list<0..2^8-1>
-} RegisterTicketsResponse;
+} CRegisterTicketsResponse;
 
 ~~~
 
