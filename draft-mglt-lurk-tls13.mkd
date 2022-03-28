@@ -1161,7 +1161,7 @@ In both cases, E interacts with CS after the server Finished is received.
 When the TLS server request the client authentication, E requests CS to generate the necessary signature for the client CertificateVerify message.
 When the TLS server does not request the client authentication and that TLS client has previously indicated the support for post handshake authentication, E provides to CS the necessary context to later perform the post handshake authentication. 
 More specifically, a interaction between E and the CS during a post handshake authentication only would either require E to provide the full handshake context which would cause too much penalty to implementation that only keep the transcript of the handshake. 
-The alternative of providing the necessary transcript to generate the signature would prevent the CS to control the input that is actually signed as well as to provide anti-replay protection as detailed in {{sec:random}}. 
+The alternative of providing the necessary transcript to generate the signature would prevent the CS to control the input that is actually signed as well as to provide anti-replay protection as detailed in {{sec:freshness}}. 
 When the TLS client has indicated the support for post handshake authentication, the only permitted exchange is c_post_hand_auth. 
 
 
@@ -1201,7 +1201,7 @@ Treatment      ||        |                      |
 
 
 
-## c_init_client_finished
+## c_init_client_finished {#sec:c_init_client_finished}
 
 E initiates a c_init_client_finished exchange during a TLS handshake when it receives a server Finished message an meets the following conditions: 
 
@@ -1254,7 +1254,7 @@ If neither E nor CS are aware of PSK, the TLS client MUST NOT propose post hands
 
 Upon receiving a CInitClientFinishedRequest, 
 CS place the server_certificate and client_certificate with a cert_type different from 'no_certificate' in the handshake as described in {{sec:cert}}. 
-CS generates the ClientHello.random with the freshness function as described in {{sec:random}}.
+CS generates the ClientHello.random with the freshness function as described in {{sec:freshness}}.
 If the handshake is certificate_request, CS generates the signature. 
 
 
@@ -1342,7 +1342,7 @@ struct{
 E generates the ClientHello.random as described in {{sec:freshness}}.  
 If E requires CS to generate (EC)DHE private keys, E replaces the KeyShareEntry structure by the EmptyKeyShareEntry structure as described in {{sec:ephemeral}}. 
 
-If PSK is proposed, E replaces the OfferedPsk structure by the OfferedPsksWithNoBinders defined {{sec:handsahke}}.
+If PSK is proposed, E replaces the OfferedPsk structure by the OfferedPsksWithNoBinders defined {{sec:handshake}}.
 The structure contains the PSK identities the TLS client intend to propose the TLS server. 
 These identities may combine a set of PSK protected by CS or not protected by CS.
 For each PSK not protected by CS, E generates a PSKIdentityMetadata structure. 

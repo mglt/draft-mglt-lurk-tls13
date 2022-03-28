@@ -4,8 +4,8 @@
 
 LURK                                                          D. Migault
 Internet-Draft                                                  Ericsson
-Intended status: Standards Track                        14 February 2022
-Expires: 18 August 2022
+Intended status: Standards Track                           28 March 2022
+Expires: 29 September 2022
 
 
          LURK Extension version 1 for (D)TLS 1.3 Authentication
@@ -22,7 +22,13 @@ Abstract
    signature schemes. * CS MUST check the certificate is supported by
    the client.  * There is no need to specify the certificate_contex in
    the Cert (finger_print) as it is known from the CertificateRequest
-   for the client and has a fix value for the server.
+   for the client and has a fix value for the server.  * session_id ->
+   the presence or absence is determined by tag.last_exchange of the
+   request!
+
+   *  psk -> the hash function needs to be defined to start the schduler
+
+   *  Extension structure is used both for LURK and TLS.
 
 Status of This Memo
 
@@ -39,7 +45,18 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 18 August 2022.
+   This Internet-Draft will expire on 29 September 2022.
+
+
+
+
+
+
+
+Migault                 Expires 29 September 2022               [Page 1]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
 
 Copyright Notice
 
@@ -50,14 +67,6 @@ Copyright Notice
    Provisions Relating to IETF Documents (https://trustee.ietf.org/
    license-info) in effect on the date of publication of this document.
    Please review these documents carefully, as they describe your rights
-
-
-
-Migault                  Expires 18 August 2022                 [Page 1]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
    and restrictions with respect to this document.  Code Components
    extracted from this document must include Simplified BSD License text
    as described in Section 4.e of the Trust Legal Provisions and are
@@ -67,7 +76,7 @@ Table of Contents
 
    1.  Introduction  . . . . . . . . . . . . . . . . . . . . . . . .   3
    2.  Terminology . . . . . . . . . . . . . . . . . . . . . . . . .   4
-   3.  LURK Header . . . . . . . . . . . . . . . . . . . . . . . . .   4
+   3.  LURK Header . . . . . . . . . . . . . . . . . . . . . . . . .   5
    4.  Structures  . . . . . . . . . . . . . . . . . . . . . . . . .   6
      4.1.  secret_request  . . . . . . . . . . . . . . . . . . . . .   6
      4.2.  handshake . . . . . . . . . . . . . . . . . . . . . . . .   7
@@ -75,62 +84,64 @@ Table of Contents
        4.2.2.  s_new_ticket  . . . . . . . . . . . . . . . . . . . .  10
        4.2.3.  s_init_early_secret . . . . . . . . . . . . . . . . .  10
        4.2.4.  s_hand_and_app_secret . . . . . . . . . . . . . . . .  10
-       4.2.5.  c_init_cert_verify  . . . . . . . . . . . . . . . . .  11
+       4.2.5.  c_init_client_finished  . . . . . . . . . . . . . . .  11
        4.2.6.  c_post_hand_auth  . . . . . . . . . . . . . . . . . .  11
-     4.3.  session_id  . . . . . . . . . . . . . . . . . . . . . . .  11
-     4.4.  freshness . . . . . . . . . . . . . . . . . . . . . . . .  12
-     4.5.  ephemeral . . . . . . . . . . . . . . . . . . . . . . . .  13
-       4.5.1.  e_generated:  . . . . . . . . . . . . . . . . . . . .  14
-       4.5.2.  cs_generated: . . . . . . . . . . . . . . . . . . . .  14
-       4.5.3.  no_secret . . . . . . . . . . . . . . . . . . . . . .  15
-     4.6.  selected_identity . . . . . . . . . . . . . . . . . . . .  16
-     4.7.  cert  . . . . . . . . . . . . . . . . . . . . . . . . . .  17
-     4.8.  tag . . . . . . . . . . . . . . . . . . . . . . . . . . .  19
-     4.9.  secret  . . . . . . . . . . . . . . . . . . . . . . . . .  20
-     4.10. signature . . . . . . . . . . . . . . . . . . . . . . . .  21
-   5.  LURK exchange on the TLS server . . . . . . . . . . . . . . .  22
-     5.1.  s_init_cert_verify  . . . . . . . . . . . . . . . . . . .  22
-     5.2.  s_new_tickets . . . . . . . . . . . . . . . . . . . . . .  25
-     5.3.  s_init_early_secret . . . . . . . . . . . . . . . . . . .  26
-     5.4.  s_hand_and_app_secret . . . . . . . . . . . . . . . . . .  27
-   6.  LURK exchange on the TLS client . . . . . . . . . . . . . . .  29
-     6.1.  c_init_post_hand_auth . . . . . . . . . . . . . . . . . .  31
-     6.2.  c_init_cert_verify  . . . . . . . . . . . . . . . . . . .  33
-     6.3.  c_post_hand_auth  . . . . . . . . . . . . . . . . . . . .  34
-     6.4.  c_init_client_hello . . . . . . . . . . . . . . . . . . .  36
-     6.5.  c_client_hello  . . . . . . . . . . . . . . . . . . . . .  38
-     6.6.  c_hand_and_app_secret . . . . . . . . . . . . . . . . . .  39
-     6.7.  c_register_tickets  . . . . . . . . . . . . . . . . . . .  41
-   7.  Security Considerations . . . . . . . . . . . . . . . . . . .  41
-   8.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  42
-   9.  Acknowledgments . . . . . . . . . . . . . . . . . . . . . . .  43
-   10. References  . . . . . . . . . . . . . . . . . . . . . . . . .  43
-     10.1.  Normative References . . . . . . . . . . . . . . . . . .  43
+       4.2.7.  c_init_client_hello . . . . . . . . . . . . . . . . .  11
+       4.2.8.  c_server_hello  . . . . . . . . . . . . . . . . . . .  12
+       4.2.9.  c_client_finished . . . . . . . . . . . . . . . . . .  12
+     4.3.  session_id  . . . . . . . . . . . . . . . . . . . . . . .  12
+     4.4.  freshness . . . . . . . . . . . . . . . . . . . . . . . .  14
+     4.5.  ephemeral . . . . . . . . . . . . . . . . . . . . . . . .  15
+       4.5.1.  TLS server side . . . . . . . . . . . . . . . . . . .  15
+       4.5.2.  no_secret . . . . . . . . . . . . . . . . . . . . . .  17
+       4.5.3.  TLS client side . . . . . . . . . . . . . . . . . . .  18
+     4.6.  selected_identity . . . . . . . . . . . . . . . . . . . .  19
+     4.7.  cert  . . . . . . . . . . . . . . . . . . . . . . . . . .  20
+     4.8.  tag . . . . . . . . . . . . . . . . . . . . . . . . . . .  24
+     4.9.  secret  . . . . . . . . . . . . . . . . . . . . . . . . .  25
+     4.10. signature . . . . . . . . . . . . . . . . . . . . . . . .  26
+   5.  LURK exchange on the TLS server . . . . . . . . . . . . . . .  26
+     5.1.  s_init_cert_verify  . . . . . . . . . . . . . . . . . . .  27
+     5.2.  s_new_tickets . . . . . . . . . . . . . . . . . . . . . .  29
+     5.3.  s_init_early_secret . . . . . . . . . . . . . . . . . . .  30
+     5.4.  s_hand_and_app_secret . . . . . . . . . . . . . . . . . .  31
+   6.  LURK exchange on the TLS client . . . . . . . . . . . . . . .  33
 
 
 
-Migault                  Expires 18 August 2022                 [Page 2]
+Migault                 Expires 29 September 2022               [Page 2]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
-     10.2.  Informative References . . . . . . . . . . . . . . . . .  43
-   Appendix A.  Annex  . . . . . . . . . . . . . . . . . . . . . . .  44
-     A.1.  TLS server ECDHE (no session resumption)  . . . . . . . .  44
-       A.1.1.  ecdhe generated on CS . . . . . . . . . . . . . . . .  45
-       A.1.2.  ecdhe generated by the TLS server . . . . . . . . . .  46
-     A.2.  TLS server ECDHE ( with session resumption )  . . . . . .  47
-     A.3.  TLS server PSK / PSK-ECDHE  . . . . . . . . . . . . . . .  48
-     A.4.  TLS client unauthenticated ECDHE  . . . . . . . . . . . .  51
-     A.5.  TLS client unauthenticated PSK / PSK-ECDHE  . . . . . . .  54
-     A.6.  TLS client authenticated ECDHE  . . . . . . . . . . . . .  56
-       A.6.1.  (EC)DHE or Proposed PSK protected by the CS . . . . .  56
-       A.6.2.  (EC)DHE provided by the TLS client  . . . . . . . . .  57
+     6.1.  c_init_client_finished  . . . . . . . . . . . . . . . . .  34
+     6.2.  c_post_hand_auth  . . . . . . . . . . . . . . . . . . . .  36
+     6.3.  c_init_client_hello . . . . . . . . . . . . . . . . . . .  37
+     6.4.  c_server_hello  . . . . . . . . . . . . . . . . . . . . .  39
+     6.5.  c_client_finished . . . . . . . . . . . . . . . . . . . .  41
+     6.6.  c_register_tickets  . . . . . . . . . . . . . . . . . . .  42
+   7.  Security Considerations . . . . . . . . . . . . . . . . . . .  42
+   8.  IANA Considerations . . . . . . . . . . . . . . . . . . . . .  44
+   9.  Acknowledgments . . . . . . . . . . . . . . . . . . . . . . .  44
+   10. References  . . . . . . . . . . . . . . . . . . . . . . . . .  44
+     10.1.  Normative References . . . . . . . . . . . . . . . . . .  44
+     10.2.  Informative References . . . . . . . . . . . . . . . . .  44
+   Appendix A.  Annex  . . . . . . . . . . . . . . . . . . . . . . .  45
+     A.1.  TLS server ECDHE (no session resumption)  . . . . . . . .  45
+       A.1.1.  ecdhe generated on CS . . . . . . . . . . . . . . . .  46
+       A.1.2.  ecdhe generated by the TLS server . . . . . . . . . .  47
+     A.2.  TLS server ECDHE ( with session resumption )  . . . . . .  48
+     A.3.  TLS server PSK / PSK-ECDHE  . . . . . . . . . . . . . . .  50
+     A.4.  TLS client unauthenticated ECDHE  . . . . . . . . . . . .  53
+     A.5.  TLS client unauthenticated PSK / PSK-ECDHE  . . . . . . .  56
+     A.6.  TLS client authenticated ECDHE  . . . . . . . . . . . . .  58
+       A.6.1.  (EC)DHE or Proposed PSK protected by the CS . . . . .  58
+       A.6.2.  (EC)DHE provided by the TLS client  . . . . . . . . .  59
      A.7.  TLS client authenticated - post handshake
-           authentication  . . . . . . . . . . . . . . . . . . . . .  58
-       A.7.1.  Initial Post Handshake Authentication . . . . . . . .  59
-       A.7.2.  Post Handshake Authentication . . . . . . . . . . . .  59
-   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  60
+           authentication  . . . . . . . . . . . . . . . . . . . . .  60
+       A.7.1.  Initial Post Handshake Authentication . . . . . . . .  61
+       A.7.2.  Post Handshake Authentication . . . . . . . . . . . .  61
+   Author's Address  . . . . . . . . . . . . . . . . . . . . . . . .  62
 
 1.  Introduction
 
@@ -151,24 +162,18 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    1.3 key schedule or generate tickets for future sessions.  To limit
    the number of exchanges between E and CS, packs these operations
    across various possible LURK exchanges as summed up in
+
+
+
+Migault                 Expires 29 September 2022               [Page 3]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
    Table Figure 1.  As a result, these exchanges do share many common
    structures, each exchange happens in a very specific state with a
    specific subset of structures that results in such exchange being
    uniquely defined.
-
-
-
-
-
-
-
-
-
-
-Migault                  Expires 18 August 2022                 [Page 3]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
 
    +--------+-----------------------+------------------------+
    |  Role  | LURK exchange         | secret | sign | ticket |
@@ -208,23 +213,25 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
       CertificateVerify message when the TLS client or TLS server use
       certificate base authentication.
 
+
+
+
+
+
+
+
+
+Migault                 Expires 29 September 2022               [Page 4]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
 3.  LURK Header
 
    The LURK Extension described in this document is designated by a
    designation set to 'tls13' and a version set to 1.  The LURK
    Extension extends the LURKHeader structure defined in
    [I-D.mglt-lurk-lurk] as follows:
-
-
-
-
-
-
-
-Migault                  Expires 18 August 2022                 [Page 4]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
 
    enum {
        tls13 (2), (255)
@@ -267,6 +274,14 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
        invalid_certificate
        invalid_cert_type
 
+
+
+
+Migault                 Expires 29 September 2022               [Page 5]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
        ///not in the code
        invalid_key_id_type
        invalid_signature_scheme
@@ -274,14 +289,6 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
        invalid_certificate_verify
        invalid_identity
        too_many_identities
-
-
-
-Migault                  Expires 18 August 2022                 [Page 5]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
    }TLS13Status
 
    struct {
@@ -326,17 +333,14 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 
 
 
-
-
-
-
-
-
-
-Migault                  Expires 18 August 2022                 [Page 6]
+Migault                 Expires 29 September 2022               [Page 6]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
+
+   Note that for the c_init_client_hello, CS MUST provide binder_keys
+   the binder_key_list and MUST omit binder_key in the secret_list (see
+   Section 6.3).
 
    +------+-------------------------------------------+
    | Bit  |      key or secret     (designation)      |
@@ -355,23 +359,20 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 
                      Figure 2: secret_request structure
 
-   +-----------------------+------------------------------+
-   | LURK exchange         | Permitted secrets            |
-   +-----------------------+------------------------------+
-   | s_init_cert_verify    | h_c*, h_s*, a_c*, a_s*, x*   |
-   | s_new_ticket          | r*                           |
-   | s_init_early_secret   | b,e_c*, e_x*                 |
-   | s_hand_and_app_secret | h_c, h_s, a_c*, a_s*, x*     |
-   | c_init_post_hand_auth | -                            |
-   | c_post_hand_auth      | -                            |
-   | c_init_cert_verify    | a_c*, a_s*, x*               |
-   | c_init_client_hello   | b*, e_c*, e_x*               |
-   | c_client_hello        | b*, e_c*, e_x*               |
-   | c_hand_and_app_secret | h_c, h_s, a_c*, a_s*, x*, r* |
-   | c_register_tickets    | -                            |
-   +-----------------------+------------------------------+
-   * indicates the secret MAY be requested
-   - indicates no secrets are requested
+   +------------------------+-----------------------+
+   | LURK exchange          | Permitted secrets     |
+   +------------------------+-----------------------+
+   | s_init_cert_verify     | h_c, h_s, a_c, a_s, x |
+   | s_new_ticket           | r                     |
+   | s_init_early_secret    | b,e_c, e_x            |
+   | s_hand_and_app_secret  | h_c, h_s, a_c, a_s, x |
+   | c_init_client_finished | -                     |
+   | c_post_hand_auth       | -                     |
+   | c_init_client_hello    | e_c, e_x              |
+   | c_server_hello         | h_c, h_s,             |
+   | c_client_finished      | a_c, a_s, r           |
+   | c_register_tickets     | -                     |
+   +------------------------+-----------------------+
 
         Figure 3: secret_request permitted values per LURK exchange
 
@@ -388,10 +389,9 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 
 
 
-
-Migault                  Expires 18 August 2022                 [Page 7]
+Migault                 Expires 29 September 2022               [Page 7]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
    Note that Certificate are not carried via the handshake structure but
@@ -404,32 +404,30 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    Table Figure 4 defines the content of the handshake parameter in the
    various exchanges.
 
-   +-----------------------+------------------------------------------+
-   | LURK exchange         | handshake content                        |
-   +-----------------------+------------------------------------------+
-   | s_init_cert_verify    | ClientHello ... later of                 |
-   |                       | server EncryptedExtensions /             |
-   |                       | CertificateRequest                       |
-   | s_new_ticket          | earlier of client CertificateVerify /    |
-   |                       | Finished ... Finished                    |
-   | s_init_early_secret   | ClientHello                              |
-   | s_hand_and_app_secret | ServerHello ... later of                 |
-   |                       | server EncryptedExtensions /             |
-   |                       | CertificateRequest                       |
-   | c_init_post_hand_auth | ClientHello ... ServerHello              |
-   |                       | CertificateRequest                       |
-   | c_post_hand_auth      | CertificateRequest                       |
-   | c_init_cert_verify    | ClientHello... later of server Finished/ |
-   |                       | EndOfEarlyData                           |
-   | c_init_client_hello   | (Partial) ClientHello  or                |
-   |                       | ClientHello, HelloRetryRequest,          |
-   |                       | (Partial) ClientHello                    |
-   | c_client_hello        | HelloRetryRequest, (Partial) ClientHello |
-   | c_hand_and_app_secret | ServerHello, {EncryptedExtensions}       |
-   |                       | ... later of { server Finished } /       |
-   |                       | EndOfEarlyData                           |
-   | c_register_tickets    | -                                        |
-   +-----------------------+------------------------------------------+
+   +------------------------+------------------------------------------+
+   | LURK exchange          | handshake content                        |
+   +------------------------+------------------------------------------+
+   | s_init_cert_verify     | ClientHello ... later of                 |
+   |                        | server EncryptedExtensions /             |
+   |                        | CertificateRequest                       |
+   | s_new_ticket           | earlier of client CertificateVerify /    |
+   |                        | Finished ... Finished                    |
+   | s_init_early_secret    | ClientHello                              |
+   | s_hand_and_app_secret  | ServerHello ... later of                 |
+   |                        | server EncryptedExtensions /             |
+   |                        | CertificateRequest                       |
+   | c_init_client_finished | ClientHello... later of server Finished/ |
+   |                        | EndOfEarlyData                           |
+   | c_post_hand_auth       | CertificateRequest                       |
+   | c_init_client_hello    | PartialClientHello  or ClientHello       |
+   |                        | HelloRetryRequest, PartialClientHello    |
+   | c_server_hello         | ServerHello                              |
+   | c_client_finished      | EncryptedExtensions ... later of         |
+   |                        | server Finished, EndOfEarlyData    OR    |
+   |                        | ServerHello, EncryptedExtensions ...     |
+   |                        | later of server Finished, EndOfEarlyData |
+   | c_register_tickets     | -                                        |
+   +------------------------+------------------------------------------+
 
                 Figure 4: handshake values per LURK exchange
 
@@ -445,9 +443,11 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 
 
 
-Migault                  Expires 18 August 2022                 [Page 8]
+
+
+Migault                 Expires 29 September 2022               [Page 8]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
       TLS server agrees and selects PSK to authenticate to be
@@ -501,9 +501,9 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 
 
 
-Migault                  Expires 18 August 2022                 [Page 9]
+Migault                 Expires 29 September 2022               [Page 9]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
    The TLS server Certificate message is provided via the certificate
@@ -557,9 +557,9 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 
 
 
-Migault                  Expires 18 August 2022                [Page 10]
+Migault                 Expires 29 September 2022              [Page 10]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
    Section 4.6.1.  To do so, CS MUST check the cipher suite selected by
@@ -571,19 +571,18 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    ServerHello as detailed in Section 4.5.  CS also generates the server
    finished message as detailed in [RFC8446] section 4.4.4.
 
-4.2.5.  c_init_cert_verify
+4.2.5.  c_init_client_finished
 
-   This exchange occurs when the TLS client is authenticated via its
-   certificate.  CS MUST check the handshake indicates the TLS server
-   has been authenticated via its certificate as well as that it
-   contains a request from the TLS server for the client authentication.
-   This is performed by checking the handshake is certificate_agreed,
-   certificate_request.  In addition, CS MUST check the presence of a
-   server CertificateVerify message.  Note also the Certificate message
-   must be included but is not directly carried by the handshake
-   structure, so the verification, if implemented by CS, can only be
-   performed after the generation of the Certificate message as detailed
-   in Section 4.7.
+   This exchange occurs when the TLS client has proposed client post
+   handshake authentication or when the TLS server is requesting client
+   authentication during the TLS handshake.  As a result, CS MUST check
+   the handshake is post_hand_auth_proposed or certificate_request and
+   raise an 'invalid_handshake' error otherwise.
+
+   Note that the Handshake context MAY but not necessarily carry a
+   server Certificate message or a client Certificate message.  These
+   message are not part of the handshake and carried in Cert structures
+   as defined in Section 4.7.
 
 4.2.6.  c_post_hand_auth
 
@@ -595,47 +594,141 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    handshake is post_hand_auth_proposed. c_post_hand_auth handshake is
    composed of the CertificateRequest message.
 
+4.2.7.  c_init_client_hello
+
+   The c_init_client_hello message carries a partial client hello that
+   corresponds to a ClientHello message to which the pre_shared_key and
+   key_share extensions have been modified.
+
+   When the TLS client proposes PSK based authentication, E indicates
+   the supported PSK via the PreSharedKeyExtension at the end of the
+   ClientHello.  As described in [RFC8446], the PreSharedKeyExtension
+   contains an OfferedPsks structure that contains identities (a list of
+   PskIdentity structure) and binders (a list of PskBinderEntry
+   structure).  As the PskBinder entries requires the binder_key to be
+   generated and that binder_key is request with the c_init_client_hello
+   at least for PSKs protected by CS, E provides a partial ClientHello
+   where OfferedPsks.binders is omitted.  The OfferedPsks structure is
+   thus replaced OfferedPsksWithNoBinders as detailed below:
+
+
+
+Migault                 Expires 29 September 2022              [Page 11]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
+   struct{
+       PskIdentity identities<7..2^16-1>;
+   }OfferedPsksWithNoBinders;
+
+   This extension MUST be present when the handshake is_psk_proposed
+   absent otherwise.  If these conditions are not met, CS SHOULD raise a
+   'invalid_handshake' error.
+
+   In addition the ClientHello may also have its KeyShare replaced by
+   PartialKeyShareClientHello as detailed in Section 4.5.
+
+   The CS MUST check the handshake is ks_proposed or psk_proposed.
+
+4.2.8.  c_server_hello
+
+   There is no particular conditions to be met by the handshake.
+
+4.2.9.  c_client_finished
+
+   The c_client_finished exchange considers two types of handshake
+   messages.  Either the handshake message starts with a
+   EncryptedExtensions message when the exchange follows a
+   c_server_hello exchange.  This situation corresponds to the case
+   where E c_client_finished follows a c_server_hello.  Otherwise the
+   handshake starts with a ServerHello message.  This situation
+   corresponds to the case where E c_client_finished follows a
+   c_init_client_hello exchange.
+
+   In both cases, Certificate message are not part of the handshake and
+   are instead carried by the Cert structure (see Section 4.7).
+
 4.3.  session_id
 
+   A TLS handshake and the establishment of a TLS session may involve a
+   single interaction between E and CS or multiple interactions.  In the
+   first case, the interactions are called stateless while in the other
+   case, interactions are statefull and the different interactions are
+   managed through a session identified by E and CS with a session_id.
+
    The session_id is a 32 bit identifier that identifies a LURK session
-   between E and the CS.  Unless the exchange is sessionless, the
-   session_id is negotiated at the initiation of the session where E
-   (resp. the CS) indicates the value to be used for inbound session_id
-   in the following exchanges.  For other exchanges, the session_id is
-   set by the sender to the inbound value provided by the receiving
-   party.  When CS receives an unexpected session_id CS SHOULD return an
+   between E and the CS.  Session_ids are agreed in the first exchange
+   of the session that instantiates the session.  The exchange is
+   designate with 's_init_' or 'c_init_' and E (resp. the CS) indicates
+   the value to be used for inbound session_id in the following
+   exchanges.  For other exchanges, the session_id is set by the sender
+   to the inbound value provided by the receiving party.  Once the
+   session_id has been negotiated by E, all message of the session will
+   have a session_id.
+
+
+
+Migault                 Expires 29 September 2022              [Page 12]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
+   When CS receives an unexpected session_id CS SHOULD return an
    invalid_session_id error.
+
+   Some exchange - indicated with * in Figure 5 - may initiate a session
+   or be part of a stateless interaction between E and CS.  More
+   specifically, the s_init_cert_verify exchange instantiates a session
+   only when E expects it to be followed by one or multiple
+   s_new_tickets messages.  If the TLS server does not intend to provide
+   session resumption for example, no further s_new_tickets exchange are
+   expected.  A similar situation occurs with the c_init_client_finished
+   exchange that may be followed by one or multiple c_post_hand_auth
+   exchanges.  If the TLS client does not supports post handshake
+   authentication, no further exchanges are envisioned.
+
+   To handle with these case, E indicates a stateless interaction by
+   setting tag.last_exchange to True and MUST omit the session_id.  As
+   described in To refuse the establishment of the session, CS sets the
+   tag.last_message to True and omit the session_id.Section 4.8, CS MUST
+   set the tag.last_message to True and MUST as well and MUST omit the
+   session_id.  Reversely, E may also initiates a session, in which
+   case, it sets tag.last_exchange to False and it MUST provide a
+   session_id.  Upon receiving the request, CS may establish a session
+   or refuse the establishment of the session and instead consider the
+   stateless mode.
 
    The session_id structure is defined below: ~~~ uint32 session_id ~~~
 
    Table Figure 5 indicates the presence of the session_id for each
    exchange.
 
-
-
-Migault                  Expires 18 August 2022                [Page 11]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
-+-----------------------+------------+
-| LURK exchange         | session_id |
-+-----------------------+------------+
-| s_init_cert_verify    |      *     |
-| s_new_ticket          |      y     |
-| s_init_early_secret   |      y     |
-| s_hand_and_app_secret |      y     |
-| c_init_post_hand_auth |      *     |
-| c_post_hand_auth      |      y     |
-| c_init_cert_verify    |      *     |
-| c_init_client_hello   |      y     |
-| c_client_hello        |      y     |
-| c_hand_and_app_secret |      y     |
-| c_register_tickets    |      y     |
-+-----------------------+------------+
++------------------------+------------+
+| LURK exchange          | session_id |
++------------------------+------------+
+| s_init_cert_verify     |      *     |
+| s_new_ticket           |      y     |
+| s_init_early_secret    |      y     |
+| s_hand_and_app_secret  |      y     |
+| c_init_client_finished |      *     |
+| c_post_hand_auth       |      y     |
+| c_init_client_hello    |      y     |
+| c_server_hello         |      y     |
+| c_client_finished      |      y     |
+| c_register_tickets     |      y     |
++------------------------+------------+
 
 y indicates the session_id is present
 * indicates session_id may be present (depending on the tag.last_exchange)
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 13]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
 
                 Figure 5: session_id in LURK exchanges
 
@@ -661,34 +754,20 @@ y indicates the session_id is present
    Table {table:freshness} details the exchanges that contains the
    freshness structure.
 
-
-
-
-
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 12]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
-   +-----------------------+-----------+
-   | LURK exchange         | freshness |
-   +-----------------------+-----------+
-   | s_init_cert_verify    |     y     |
-   | s_new_ticket          |     -     |
-   | s_init_early_secret   |     -     |
-   | s_hand_and_app_secret |     y     |
-   | c_init_post_hand_auth |     y     |
-   | c_post_hand_auth      |     -     |
-   | c_init_cert_verify    |     y     |
-   | c_init_client_hello   |     y     |
-   | c_client_hello        |     -     |
-   | c_hand_and_app_secret |     -     |
-   | c_register_tickets    |     -     |
-   +-----------------------+-----------+
+   +------------------------+-----------+
+   | LURK exchange          | freshness |
+   +------------------------+-----------+
+   | s_init_cert_verify     |     y     |
+   | s_new_ticket           |     -     |
+   | s_init_early_secret    |     -     |
+   | s_hand_and_app_secret  |     y     |
+   | c_init_client_finished |     y     |
+   | c_post_hand_auth       |     -     |
+   | c_init_client_hello    |     y     |
+   | c_server_hello         |     -     |
+   | c_client_finished      |     -     |
+   | c_register_tickets     |     -     |
+   +------------------------+-----------+
 
    y indicates freshness is present
    - indicates freshness is absent
@@ -697,6 +776,15 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 
    When CS is running on the TLS server, the ServerHello.random is
    generated as follows:
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 14]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
 
    server_random = ServerHello.random
    ServerHello.random = freshness( server_random + "tls13 pfs srv" );
@@ -723,13 +811,6 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    defines the following ephemeral methods to generate the (EC)DHE
    shared secret:
 
-
-
-Migault                  Expires 18 August 2022                [Page 13]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
    *  e_generated: Where (EC)DHE keys and shared secret are generated by
       E and the shared secret is provided to the CS
 
@@ -739,125 +820,221 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    *  no_secret: where no (EC)DHE is involved, and PSK authentication is
       performed.
 
-4.5.1.  e_generated:
+4.5.1.  TLS server side
 
-   When the (EC)DHE keys and (EC)DHE shared secret are generated by the
-   E, E provides the shared secret value to the CS.  The shared secret
-   is transmitted via the SharedSecret structure, which is similar to
-   the key_exchange parameter of the KeyShareEntry described in CS MUST
-   NOT return any data.  Note that CS is unable to check the (EC)DHE
-   shared secret has been generated with the public keys provided either
-   by the ClientHello or the ServerHello.[RFC8446] section 4.2.8.
-
-   struct {
-      NamedGroup group;
-      opaque shared_secret[coordinate_length];
-   } SharedSecret;
-
-   Where coordinate_length depends on the chosen group.  For secp256r1,
-   secp384r1, secp521r1, x25519, x448, the coordinate_length is
-   respectively 32 bytes, 48 bytes, 66 bytes, 32 bytes and 56 bytes.
-   Upon receiving the shared_secret, CS MUST check group is proposed in
-   the KeyShareClientHello and agreed in the KeyShareServerHello.
-
-4.5.2.  cs_generated:
-
-   When the ECDHE public/private keys are generated by the CS, E
-   requests CS the associated public value.  Note that in such cases CS
-   would receive an incomplete Handshake Context from E with the public
-   part of the ECDHE missing.  Typically the ServerHello message would
-   present a KeyShareServerHello that consists of a KeyShareEntry with
-   an empty key_exchange field, but the field group is present.
-
-   CS MUST check the group field in the KeyShareServerHello, and get the
-   public value of the TLS client from the KeyShareClientHello.  CS
-   performs the same checks as described in [RFC8446] section 4.2.8.  CS
-   generates the private and public (EC)DH keys, computes the shared key
-   and return the KeyShareEntry server_share structure defined in
-   [RFC8446] section section 4.2.8 to the LURK client.
+   On the TLS server side, the EphemeralRequest and EphemeralResponse
+   structures are defined as follows:
 
 
 
 
 
 
-Migault                  Expires 18 August 2022                [Page 14]
+
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 15]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
-   Note: The use of an empty KeyShareEntry results in the length of the
-   ServerHello, the ServerHello.extensions and the KeyShareServerHello
-   sent by E to CS to be increases to the size of the coordinate length
-   of the chosen group before being added to the Handshake context of CS
-   or being sent to the TLS client by the E.
-
-4.5.3.  no_secret
-
-   With PSK authentication, (EC)DHE keys and shared secrets are not
-   needed.  CS MUST check the PSK authentication without (EC)DHE has
-   been agreed.  More specifically, CS MUST check the handshake is
-   'psk_proposed', 'psk_agreed' and is not 'ks_agreed' as detailed in
-   [RFC8446] section 4.2.9.
-
-   When the ephemeral method or the group is not supported, expected
-   extensions are not found CS SHOULD return an invalid_ephemeral error.
-
-   Table {table:ephemeral} indicates the exchanges that contain the
-   ephemeral parameter as well as the permitted methods.
-
-+-----------------------+-----------+---------------------------+
-|                       |           |  ephemeral_method= secret |
-| LURK exchange         | ephemeral | no | provided | generated |
-+-----------------------+-----------+----+----------+-----------+
-| s_init_cert_verify    |     y     | -  |    y     |     y     |
-| s_new_ticket          |     -     | -  |    -     |     -     |
-| s_init_early_secret   |     -     | -  |    -     |     -     |
-| s_hand_and_app_secret |     y     | y  |    y     |     y     |
-| c_init_post_hand      |     y     | -  |         |          |
-| c_post_hand_auth           |     y     | -  |         |          |
-| c_init_cert_verify    |     y     | -  |    y     |    -      |
-| c_init_client_hello   |     y     | y  |         |          |
-| c_client_hello        |     y     | y  |         |          |
-| c_hand_and_app_secret |     y     | y  |         |          |
-| c_register_tickets    |     -     | -  |         |          |
-+-----------------------+-----------+----+----------+-----------+
-
-y indicates presence of ephemeral or possible value for ephemeral_method
-- indicates absent or ephemeral or incompatible value for ephemeral_method
-
-              Figure 7: Ephemeral field in LURK exchange
-
-   The EphemeralRequest and EphemeralResponse structures are defined as
-   follows:
-
-
-
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 15]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
 enum { no_secret (0), e_generated(1), cs_generated(2) (255)} EphemeralMethod;
+
+struct {
+   NamedGroup group;
+   opaque shared_secret[coordinate_length];
+} SharedSecret;
 
 EphemeralRequest {
     EphemeralMethod method;
     select(method) {
         case e_generated:
-            SharedSecret shared_secret<0..2^16>;
+            SharedSecret key <0..2^16>;
     }
 }
 
 EphemeralResponse {
+    EphemeralMethod method;
     select(method) {
         case cs_generated:
-            KeyShareEntry server_share
+            KeyShareEntry key // KeyShareServerHello.server_share
   }
 }
+
+   Where:
+
+   coordinate_length  indicates the length in bytes of the shared_secret
+      and depends on the chosen group.  For secp256r1, secp384r1,
+      secp521r1, x25519, x448, the coordinate_length is respectively 32
+      bytes, 48 bytes, 66 bytes, 32 bytes and 56 bytes.
+
+4.5.1.1.  e_generated:
+
+   When the (EC)DHE keys and (EC)DHE shared secret are generated by the
+   E, E provides the shared secret value to the CS.  E indicates a
+   shared secret is provided by sending an EphemeralRequest with a
+   method set to 'e_generated'.  The shared secret is transmitted in the
+   SharedSecret structure.  The SharedSecret structure is a
+   KeyShareEntry described in [RFC8446] section 4.2.8. where the
+   KeyShareEntry.key_exchange is replaced by SharedSecret.shared_secret.
+
+   Upon receiving a EphemeralRequest, CS MUST check group is proposed in
+   the KeyShareClientHello and agreed in the KeyShareServerHello.  If
+   not an 'invalid_ephemeral' error SHOULD be raised.  CS takes the
+   shared_secret provide as the input to the key schedule.  CS MUST NOT
+   return any data and the EphemeralResponse only contains the method.
+   Note that CS is unable to check the (EC)DHE shared secret has been
+   generated with the public keys provided either by the ClientHello or
+   the ServerHello.
+
+
+
+Migault                 Expires 29 September 2022              [Page 16]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
+4.5.1.2.  cs_generated:
+
+   When the ECDHE public/private keys are generated by the CS, E sends
+   an EphemeralRequest with a method set to 'cs_generated' to request CS
+   to generate the (EC)DHE private key and return the corresponding key
+   that is returned to the TLS client.  The EphemeralRequest structure
+   does not carry any other information than the method.  Instead the
+   ServerHello carries the group information in a NameGroup structure.
+   The NameGroup structure is carried by a modified KeyShareEntry of the
+   KeyShareServerHello structure.  Note that in such cases CS would
+   receive an incomplete Handshake Context from E with the public part
+   of the ECDHE (KeyShareServerHello.server_share.key_exchange) being of
+   zero length as described by the EmptyKeyShareEntry below:
+
+   struct {
+     NamedGroup group;
+     int16 key_exchange=0
+   } EmptyKeyShareEntry
+
+   Upon receiving the EphemeralRequest, CS MUST check the group field in
+   the KeyShareServerHello, and get the public value of the TLS client
+   from the KeyShareClientHello.  CS performs the same checks as
+   described in [RFC8446] section 4.2.8.  CS generates the private and
+   public (EC)DH keys, computes the shared key and return the
+   KeyShareEntry server_share structure defined in [RFC8446] section
+   section 4.2.8 to E.
+
+4.5.2.  no_secret
+
+   When the PSK only authentication is chosen, (EC)DHE keys and shared
+   secrets are not needed.  To indicate that no ECDHE shared secret is
+   involved E set the EphemeralRequest.methode to 'no_secret'.
+
+   Upon receiving the EphemeralRequest, CS MUST check the PSK
+   authentication without (EC)DHE has been agreed.  More specifically,
+   CS MUST check the handshake is 'psk_proposed', 'psk_agreed' and is
+   not 'ks_agreed' as detailed in [RFC8446] section 4.2.9.
+
+   When the ephemeral method or the group is not supported, expected
+   extensions are not found CS SHOULD return an invalid_ephemeral error.
+
+
+
+
+
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 17]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
+4.5.3.  TLS client side
+
+   While the TLS server side proceeds to a ephemeral exchange with
+   ephemeral structures in both request and response, in the case of the
+   TLS client, ephemeral only appears in the request or in the response.
+   Typically, in the c_init_client_hello, E requests CS to generate
+   (EC)DHE via a specific structure of the KeyShareEntry carried by the
+   CLientHello.  CS on the other hand returns the generated public
+   (EC)DHE keys in a ephemeral structure.  In the case of the
+   c_server_hello, E provides the necessary information to CS, but does
+   not receive any response.
+
+4.5.3.1.  c_init_client_hello
+
+   A TLS client may propose multiple KeyShareEntry to the TLS server in
+   a KeyShareClientHello.client_shares structure.  These KeyShareEntry
+   may be generated by E or CS.  E indicates CS a (EC)DHE key needs to
+   be generated by replacing the KeyShareEntry by am EmptyKeyShareEntry.
+   E does not provide any EphemeralRequest message as no extra
+   information is needed.  Upon receiving a c_init_client_hello, CS
+   processes every KeyShareEntry or EmptyKeyShareEntry of the
+   KeyShareClientHello.client_shares to return a list of
+   EphemeralResponse structure.  For each KeyShareEntry or
+   EmptyKeyShareEntry of the client_shares - processed in the exact
+   order of the client_shares.  When a KeyShareEntry is encountered, CS
+   generates a corresponding EphemeralResponse with a method set to
+   'e_generated'.  When an EmptyKeyShareEntry is encountered, CS
+   generates the private key and generates a KeyShareEntry that contains
+   the corresponding public key.  That KeyShareEntry replaces the
+   EmptyKeyShareEntry and is added to an EmphemeralResponse with a
+   method set to 'cs_generated'.  The resulting list of
+   EphemeralResponse is returned to E, so E can complete its
+   CLientHello.
+
+4.5.3.2.  c_server_hello
+
+   With a c_server_hello exchange, E determine the selected
+   KeyShareEntry by the TLS server KeyShareServerHello.server_share If
+   the (EC)DHE client secret key has been generated by CS, E sends an
+   EphemeralRequest with a method set to 'cs_generated'.  If the (EC)DHE
+   client secret key has been generated by E, E provides the share
+   secret via a EphemeralRequest with its method set to 'e_generated'.
+   When no (EC)DHE is being used, E sets its ephemeral to 'no_secret'.
+   A 'no_secret' ephemeral correspond to a psk_agreed handshake only.
+
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 18]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
+   Table {table:ephemeral} indicates the exchanges that contain the
+   ephemeral parameter as well as the permitted methods.  The CS MUST
+   check compliance with Table {table:ephemeral} and raise an
+   'invalid_ephemeral' error in case of non compliance.
+
+   +-----------------------+-----------+---------------------------+
+   |                       |           |      method= secret       |
+   | LURK exchange         | ephemeral | no |  e_gen.  |  cs_gen.  |
+   +-----------------------+-----------+----+----------+-----------+
+   | s_init_cert_verify    |y          | -  |    y     |    y      |
+   | s_new_ticket          |-          | -  |    -     |    -      |
+   | s_init_early_secret   |-          | -  |    -     |    -      |
+   | s_hand_and_app_secret |y          | y  |    y     |    y      |
+   | c_init_client_finished|y          | y  |    y     |    -      |
+   | c_post_hand_auth      |y          | -  |          |    -      |
+   | c_init_client_hello   |y response | -  |    y     |    y      |
+   | c_server_hello        |y request  | y  |    y     |    y      |
+   | c_client_finished     |-          | -  |    -     |    -      |
+   | c_register_tickets    |-          | -  |          |           |
+   +-----------------------+-----------+----+----------+-----------+
+
+   y indicates possible value for method
+   - indicates incompatible value for method
+
+                 Figure 7: Ephemeral field in LURK exchange
 
 4.6.  selected_identity
 
@@ -870,6 +1047,25 @@ EphemeralResponse {
 
    uint16 selected_identity; //RFC8446 section 4.2.11
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 19]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
    +-----------------------+-----+
    | LURK exchange         | req |
    +-----------------------+-----+
@@ -879,10 +1075,9 @@ EphemeralResponse {
    | s_hand_and_app_secret |  -  |
    | c_init_post_hand_auth |  -  |
    | c_post_hand_auth      |  -  |
-   | c_init_cert_verify    |  -  |
    | c_init_client_hello   |  -  |
-   | c_client_hello        |  -  |
-   | c_hand_and_app_secret |  -  |
+   | c_server_hello        |  -  |
+   | c_client_finished     |  -  |
    | c_register_tickets    |  -  |
    +-----------------------+-----+
 
@@ -890,13 +1085,6 @@ EphemeralResponse {
    - indicates the selected_identity is absent
 
                      Figure 8: psk_id in LURK exchange
-
-
-
-Migault                  Expires 18 August 2022                [Page 16]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
 
    CS retrieve the PSK identity from the ClientHello and SHOULD send an
    invalid_psk error if an error occurs.  For the TLS server, CS MUST
@@ -926,6 +1114,14 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    server between E and the CS.  The compressed format is a
    FingerPrintCertificate which contains a list of
    FingerPrintCertificateEntry where each opaque certificate data -
+
+
+
+Migault                 Expires 29 September 2022              [Page 20]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
    RawPublicKey or X509 content as described in [RFC8446] section 4.4.2
    - is instead replaced by the 4 byte finger_print of these certificate
    data.  The finger_print consists in the 4 first bytes of the output
@@ -946,14 +1142,6 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    psk_agreed), CS MUST check the presence of a server Certificate
    message and reject and raise a 'invalid_certificate' error if
    cert_type is set to no_certificate.  When the handshake is
-
-
-
-Migault                  Expires 18 August 2022                [Page 17]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
    psk_proposed and psk_agreed, CS MUST check the absence of server
    Certificate and raise an 'invalid_certificate' if cert_type is not
    set to no_certificate.  When the handshake is certificate_request, CS
@@ -961,6 +1149,34 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    'invalid_certificate' if cert_type is not set to no_certificate.
 
    The cert structure is defined as follows:
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 21]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
 
 enum { zlib(1),  brotli(2),  zstd(3), no_certificate(128), finger_print(129), uncompressed(130), (255)
 } CertType;
@@ -1003,19 +1219,20 @@ struct {
       FingerPrintCertificate, and Certificate certificate as detailed in
       [RFC8446] section 4.4.2.
 
-
-
-Migault                  Expires 18 August 2022                [Page 18]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
    certificate_list  A sequence (chain) of FingerPrintCertificateEntry
       structures, each containing a single certificate and set of
       extensions.
 
    certificate_request_context, extensions, certificate_type are defined
    in [RFC8446] section 4.4.2.
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 22]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
 
    finger_print  the first 4 bytes of the resulting SHA256 output of the
       certificate in DER format or the ASN.1_subjectPublicKeyInfo
@@ -1024,27 +1241,54 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    Table Figure 9 indicates the presence of that field in the LURK
    exchanges.
 
-   +-----------------------+-------------+-------------------+
-   | LURK exchange         | certificate | certificate type  |
-   +-----------------------+-------------+-------------------+
-   | s_init_cert_verify    |      y      | server            |
-   | s_new_ticket          |      *      | client            |
-   | s_init_early_secret   |      -      |                   |
-   | s_hand_and_app_secret |      -      |                   |
-   | c_init_post_hand_auth |      y      | client            |
-   | c_post_hand_auth      |      y      | client            |
-   | c_init_cert_verify    |      y      | client and server |
-   | c_init_client_hello   |      -      |                   |
-   | c_client_hello        |      -      |                   |
-   | c_hand_and_app_secret |      y      | client            |
-   | c_register_tickets    |      -      |                   |
-   +-----------------------+-------------+-------------------+
+   +------------------------+------+-------------------+
+   | LURK exchange          | cert | certificate type  |
+   +------------------------+------+-------------------+
+   | s_init_cert_verify     |  y   | server            |
+   | s_new_ticket           |  y   | client*           |
+   | s_init_early_secret    |  -   |                   |
+   | s_hand_and_app_secret  |  -   |                   |
+   | c_init_client_finished |  y   | client* / server* |
+   | c_post_hand_auth       |  y   | client            |
+   | c_init_client_hello    |  -   |                   |
+   | c_server_hello         |  -   |                   |
+   | c_client_finished      |  y   | client*/server*   |
+   | c_register_tickets     |  -   |                   |
+   +------------------------+------+-------------------+
 
-   * indicates certificate type MAY be set to no_certificate.
-   y indicates certificate type MUST NOT be set to 'no_certificate'
+   y indicates the presence of certificate in the exchange
    - indicates the certificate structure is absent
+   * indicates certificate type MAY be set to no_certificate.
 
                       Figure 9: cert in LURK exchange
+
+   In the s_new_ticket exchange, if cert_type is set to
+   'no_certificate', the handshake does not have a CertificateVerify
+   message.  Reversely, if cert_type is not set to 'no_certificate' a
+   CertificateVerify message MUST be present in the hanshake.
+
+   In the c_init_client_finished, if server_certificate.cert_type is set
+   to 'no_certificate', CS checks the handshake is psk_proposed and
+   psk_agreed.  Reversely, if server_certificate.cert_type is not set to
+   'no_certificate', CS checks the handshake is certificate_agreed.  If
+   the client_certificate is set to 'no_certificate', CS checks the
+   handshake is not certificate_request.  Reversely, if the
+   client_certificate is not set to 'no_certificate', CS checks the
+   handshake is certificate_request.
+
+   If one if these condition is not met, CS raises an
+   'invalid_certificate' error.
+
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 23]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
 
 4.8.  tag
 
@@ -1058,17 +1302,20 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    When E does not expect the current message to be the last one it sets
    the tag.last_exchange to False.  CS responds with a tag.last_exchange
    set to False to confirm additional exchanges may be performed.  On
+   the other hand, CS may also indicates this is the last exchange due
+   to configuration or internal policies and set tag.last_exchange to
+   True.  Typically, for the s_new_ticket exchange, it is RECOMMENDED CS
+   is configured with a maximum number of tickets to emit, and to set
+   the tag.last_exchange to True when this limit has been reached.  For
+   the c_init_client_finished exchange, the CS MUST set
+   tag.last_exchange to True if the handshake is not
+   post_hand_auth_proposed.  For the c_post_hand_auth exchange, it is
+   RECOMMENDED CS is configured with a maximum number of post handshake
+   authentication and set the tag.last_exchange to True once this limit
+   has been reached.
 
-
-
-Migault                  Expires 18 August 2022                [Page 19]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
-   the other hand, CS may also indicates this is the last exchange and
-   set tag.last_exchange to True, in which case E MUST reset the session
-   and MUST NOT proceed to any further exchanges.
+   Upon receiving a response with a tag.last_exchange set to True, E
+   MUST reset the session and MUST NOT proceed to any further exchanges.
 
    In this document, we use setting, setting to True to indicate the bit
    is set to 1.  Respectively, we say unsetting, setting to False to
@@ -1089,38 +1336,42 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 
                          Figure 10: tag description
 
-   +-----------------------+--------------+--------------+
-   | LURK exchange         | last_exchange | cert_request |
-   +-----------------------+--------------+--------------+
-   | s_init_cert_verify    |       y      |       -      |
-   | s_new_ticket          |       y      |       -      |
-   | s_init_early_secret   |       -      |       -      |
-   | s_hand_and_app_secret |       y      |       -      |
-   | c_init_post_hand_auth |       y      |       -      |
-   | c_post_hand_auth      |       y      |       -      |
-   | c_init_cert_verify    |       y      |       -      |
-   | c_init_client_hello   |       -      |       -      |
-   | c_client_hello        |       -      |       _      |
-   | c_hand_and_app_secret |       y      | y (response) |
-   | c_register_tickets    |       y      |       -      |
-   +-----------------------+--------------+--------------+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 24]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
+   +------------------------+---------------+
+   | LURK exchange          | last_exchange |
+   +------------------------+---------------+
+   | s_init_cert_verify     |       y       |
+   | s_new_ticket           |       y       |
+   | s_init_early_secret    |       -       |
+   | s_hand_and_app_secret  |       y       |
+   | c_init_client_finished |       y       |
+   | c_post_hand_auth       |       y       |
+   | c_init_client_hello    |       -       |
+   | c_server_hello         |       -       |
+   | c_client_finished      |       y       |
+   | c_register_tickets     |       y       |
+   +------------------------+---------------+
 
    y indicates tag is present
    - indicates tag is absent
 
                       Figure 11: tag per LURK exchange
 
+   c_init_client_finished
+
 4.9.  secret
 
    The Secret structure is used by CS to send the various secrets
    derived by the key schedule described in [RFC8446] section 7.
-
-
-
-Migault                  Expires 18 August 2022                [Page 20]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
 
    The Secret structure is defined as follows:
 
@@ -1143,6 +1394,13 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    } Secret;
 
    secret_type: The type of the secret or key
+
+
+
+Migault                 Expires 29 September 2022              [Page 25]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
 
    secret_data: The value of the secret.
 
@@ -1169,15 +1427,6 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 
    The signature structure is defined as follows:
 
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 21]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
    struct {
        opaque signature<0..2^16-1>; //RFC8446 section 4.4.3.
    } Signature;
@@ -1200,6 +1449,15 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    handshake and application secrets and optionally the generation of
    the (EC)DHE.
 
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 26]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
    Once, the handshake has been completed, E may request the generation
    of tickets to enable session resumption.  This is again a server side
    decision which may be performed via a s_new_ticket exchange.
@@ -1215,24 +1473,6 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    authenticated with (EC)DHE.  E sends a SInitCertVerifyRequest to CS
    and is responded a SInitCertVerifyResponse structure unless an error
    is being raised.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 22]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
 
    struct{
        uint8 tag;
@@ -1267,6 +1507,13 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    (Section 4.7), secret_request (Section 4.1), signature
    (Section 4.10), secret_list (Section 4.9).
 
+
+
+Migault                 Expires 29 September 2022              [Page 27]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
    If the exchange is expected to be followed by a s_new_ticket
    exchange, typically to enable session resumption, E set the
    tag.last_exchange to False as described in Section 4.8.
@@ -1281,19 +1528,9 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    RECOMMENDED to use a freshness function that provides similar
    security as TLS Hash function.
 
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 23]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
    E either generates the (EC)DHE or requests CS to generates, in which
-   case it respectively sets the ephemeral.ephemeral_method to
-   'e_generated' or 'cs_generated' and proceeds as described in
-   Section 4.5.
+   case it respectively sets the ephemeral.method to 'e_generated' or
+   'cs_generated' and proceeds as described in Section 4.5.
 
    E provides the necessary TLS Handshake context in handshake and
    certificate as respectively detailed in Section 4.2 and Section 4.7.
@@ -1321,6 +1558,18 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    to have the necessary TLS Handshake context to generate the
    signature.
 
+
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 28]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
    CS then generates the signature, provides the resulting value in the
    signature field of the response and complete the CeriticateVerify
    message that inserted into the TLS handshake context of the CS, so
@@ -1330,21 +1579,6 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 
    Once generated, the requested secrets are returned in secret_list as
    detailed in Section 4.1 and Section 4.9.
-
-
-
-
-
-
-
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 24]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
 
 5.2.  s_new_tickets
 
@@ -1384,6 +1618,14 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    the case of delegation this number MAY be set to zero.  CS MAY
    responds with less tickets when the value is too high.
 
+
+
+
+Migault                 Expires 29 September 2022              [Page 29]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
    For other parameters, see the corresponding sections tag
    (Section 4.8), session_id (Section 4.3), handshake (Section 4.2),
    certificate (Section 4.7), secret_request (Section 4.1), secret_list
@@ -1393,14 +1635,6 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    Section 4.3 E sets the session_id with the value received in the
    SInitCertVerifyResponse or the SInitEarlySecretResponse of the
    previous exchange.
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 25]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
 
    E MUST ensure CS has sufficient TLS Handshake context, that is the
    client Finished and optionally the client Certificate and
@@ -1443,19 +1677,9 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 
 
 
-
-
-
-
-
-
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 26]
+Migault                 Expires 29 September 2022              [Page 30]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
    struct{
@@ -1509,9 +1733,9 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 
 
 
-Migault                  Expires 18 August 2022                [Page 27]
+Migault                 Expires 29 September 2022              [Page 31]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
    The SHandAndAppSecretRequest and SHandAndAppSecretResponse structures
@@ -1541,34 +1765,10 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    described in Section 5.1.  As described in Section 4.3 E sets the
    session_id with the value received in the SInitEarlySecretResponse.
    If E does decides the TLS server is authenticated with the PSK mode
-   without (EC)DHE, it sets ephemeral.ephemeral_method to 'no_secret'.
-   If the TLS server is authenticated with PSK and (EC)DHE, then the
-   ephemeral.ephemeral_method can be set to 'e_generated' or
-   'cs_generated' depending whether E or CS generates the (EC)DHE
-   private key.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 28]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
+   without (EC)DHE, it sets ephemeral.method to 'no_secret'.  If the TLS
+   server is authenticated with PSK and (EC)DHE, then the
+   ephemeral.method can be set to 'e_generated' or 'cs_generated'
+   depending whether E or CS generates the (EC)DHE private key.
 
    Upon receiving the SHandAndAppSecretRequest sets the
    tag.last_exchange as described in Section 5.1.  The session_id is set
@@ -1587,6 +1787,13 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    has the same hash function as the one provided by the ticket - see
    Section 4.2.
 
+
+
+Migault                 Expires 29 September 2022              [Page 32]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
    CS generates the ServerHello.random as detailed in Section 4.4 to
    implement anti replay protection.  Withe the ServerHello message set,
    the handshake secrets are generated with the key schedule initiated
@@ -1600,212 +1807,113 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 
    Similarly to the TLS server, the credentials involved in the TLS
    client authentication are PK, (EC)DHE and PSK.  This document assumes
-   PK, when involved, is always protected by the CS.  Unlike the TLS
-   server, the TLS client can be authenticated within the TLS handshake
-   as well as in a post handshake client authentication exchange.
+   PK, when involved, is always protected by the CS and considers the
+   three following scenarios:
 
-   During the TLS handshake, the TLS client can be authenticated using a
-   certificate base authentication or a PSK based authentication.  Note
-   that according to [RFC8446] section 4.3.2, certificate based
-   authentication for the TLS client is only allowed when the TLS
-   server's authentication is also certificate based.
+   *  CS only protects PK in which case CS is limited to generating the
+      signature of the CertificateVerify of the TLS client.  Such
+      signature may be generated during the TLS handshake or during a
+      client post handshake authentication.
 
-   Protection by CS of the client certificate authentication works
-   similarly to the certificate based authentication on the TLS server
-   side.  CS can protect the PK only or both the PK and the (EC)DHE
-   private key.  When (EC)DHE is protected by the CS, E requests the CS,
-   via a c_init_client_hello exchange, the (EC)DHE public key to build
-   and send its ClientHello.  Upon receiving the ServerHello, E
-   requests, via a c_all exchange, handshake, application and exporter
-   secrets, and the signature of the client CertificateVerify.  E is
+   *  CS protects the (EC)DHE key or the PSK in addition to the PK.  In
+      particular, resumed session are provided a similar level of
+      security by CS.
+
+   The protection of the (EC)DHE or the PSK requires some interaction
+   between E and the CS to build the ClientHello message
+   (c_init_client_hello), as well as once the server Finished is
+   received to build the optional CertificateVerify and client Finished
+   message (c_client_finished).  Once the TLS handshake is finished, E
+   and CS may interact to register tickets received by the TLS server
+   (c_register_ticket) or to proceed to a client post handshake
+   authentication when requested by the TLS server and when permitted by
+   the TLS client (c_post_hand_auth).
+
+   On the other hand, when only PK is protected, the generation of
+   signature by the CS may occur for the client authentication (during
+   the TLS handshake) or after, during a client post handshake
+   authentication.  In both cases, E interacts with CS after the server
+   Finished is received.  When the TLS server request the client
+   authentication, E requests CS to generate the necessary signature for
+   the client CertificateVerify message.  When the TLS server does not
+   request the client authentication and that TLS client has previously
+   indicated the support for post handshake authentication, E provides
+   to CS the necessary context to later perform the post handshake
+   authentication.  More specifically, a interaction between E and the
+   CS during a post handshake authentication only would either require E
+   to provide the full handshake context which would cause too much
 
 
 
-Migault                  Expires 18 August 2022                [Page 29]
+Migault                 Expires 29 September 2022              [Page 33]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
-   able to build the client Finished message and send it to the TLS
-   server to complete the TLS handshake.  When (EC)DHE is not protected
-   by the CS, E can build the ClientHello message without any
-   interaction with CS and only requests, via a c_init_cert_verify
-   exchange, CS to generates the signature of the client
-   CertificateVerify message and complete the handshake.
+   penalty to implementation that only keep the transcript of the
+   handshake.  The alternative of providing the necessary transcript to
+   generate the signature would prevent the CS to control the input that
+   is actually signed as well as to provide anti-replay protection as
+   detailed in Section 4.4.  When the TLS client has indicated the
+   support for post handshake authentication, the only permitted
+   exchange is c_post_hand_auth.
 
-   Protection by CS of the PSK based authentication is provided with CS
-   protecting the PSK and optionally the (EC)DHE or only the (EC)DHE to
-   later bootstrap to protected authentication for session resumption.
-   In any case, E requests the PSK binder_key or (EC)DHE public key to
-   the CS, via a c_init_client_hello, to build and send the ClientHello.
-   Upon receiving the ServerHello, handshake, application and exporter
-   secrets are generated via a c_all exchange, to complete the
-   handshake.
+ClientHello    ^ method is 'cs_generated' no
+  Derivation   | or PSK in CS Proposed --------------+
+ClientHello    |     yes |                           |
+  sent      -->v  c_init_client_hello                |
+ServerHello -->^         |        |      certificate_request or   no
+  received     |  c_server_hello (a)     post_hand_auth_proposed ---+
+               |         |        |               yes |             |
+ServerHello    |  c_client_finished         c_init_client_finished  |
+  Treatment    |         |                            |             |
+clientFinished |         +---------+-----------------+     no CS protection
+  sent      -->v                   |                       provided
+               ^                   |
+               |+----------------->+
+Posthandshake  ||        +---------+------------+
+Treatment      ||        |                      |
+               ||post_hand_auth_proposed  method is 'cs_generated'
+               ||        +                or  PSK in use in CS
+               ||CertificateRequest             +
+               ||        |                NewSessionTicket
+               ||        |                      |
+               ||c_post_hand_auth         c_register_tickets
+               ||        |                      |
+               ||        +-------+--------------+
+               ||                |
+               v+----------------+
+                                 |
+                            LURK session
+                            closed
 
-   Once the handshake is completed, the TLS server may request a client
-   post handshake authentication.  If the TLS client has not been
-   authenticated or at least without involving the CS, E perform the
-   post handshake authentication via a c_init_post_hand_auth.  On the
-   contrary, the authentication is performed via a c_post_hand_auth.
+(a) ( method is 'e_generated' or 'no_secret')  and chosen PSK not in CS
 
-   In addition, once the handshake has been completed, E may register
-   the ticket received from the TLS server to CS via a
-   c_register_tickets exchange.
+                 Figure 12: LURK client State Diagram
 
-   The remaining of the section describes CS behavior.  Implementation
-   may differ from the description and generates the response otherwise.
-   The response SHOULD however remain coherent with the description
-   provided.
+6.1.  c_init_client_finished
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+   E initiates a c_init_client_finished exchange during a TLS handshake
+   when it receives a server Finished message an meets the following
+   conditions:
 
 
 
-Migault                  Expires 18 August 2022                [Page 30]
+
+
+Migault                 Expires 29 September 2022              [Page 34]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
-   ClientHello    ^   (EC)DHE generated by CS    no
-     Derivation   |   or PSK in CS Proposed -------+
-   ClientHello    |       yes |                    |
-     sent      -->v    c_init_client_hello         |
-   ServerHello -->^           |         ks_proposed/agreed no
-     received     |           |         certificate_agree --+
-                  |           |                yes |        |
-   ServerHello    |         c_all         c_init_cert_verify|
-     Treatment    |           |                    |        |
-   clientFinished |           +-------+------------+        |     no
-     sent      -->v                   |        post_auth_proposed --+
-                  ^                   |                     +       |
-                  |                   |         CertificateRequest  |
-                  |                   |                     |       |
-                  |                   |        c_init_post_hand_auth|
-                  |                   |                     |       |
-                  |+----------------->|<--------------------+       |
-   Posthandshake  ||        +---------+-------+                     |
-   Treatment      ||        |                 |                     |
-                  ||post_auth_proposed  (EC)DHE generated by CS or  |
-                  ||        +           PSK in use in CS            |
-                  ||CertificateRequest        +                     |
-                  ||        |          NewSessionTicket             |
-                  ||        |                 |                     |
-                  ||c_post_hand_auth c_register_tickets             |
-                  ||        |                 |                     |
-                  ||        +-------+---------+                     |
-                  ||                |                               |
-                  v+----------------+                         +-----+
-                                    |                         |
-                               LURK session         LURK session
-                               closed               not initiated
+   1.  The TLS handshake has not required any interaction between E and
+       CS.
 
-                    Figure 12: LURK client State Diagram
+   2.  The TLS server requests a client authentication or the TLS client
+       has enabled client post handshake authentication.
 
-6.1.  c_init_post_hand_auth
-
-   The c_init_post_hand_auth occurs when the TLS client performs post
-   handshake authentication while no previous interactions occurred
-   between the TLS client and the CS.
-
-   The TLS server MAY authenticated via its certificate but as this is
-   the initial interaction between E and CS, if PSK authentication is
-   used, the PSK is not protected by CS.  Similarly, (EC)DHE is neither
-   protected by CS and as we assumed the client PK is protected by CS,
-   the client has not been authenticated with its certificate.
-
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 31]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
-   struct{
-     uint8 tag;
-     select (tag.last_exchange){
-       case False:
-         uint32 session_id;
-     }
-     FreshnessFunct freshness;
-     Handshake handshake<0..2^32> //RFC8446 section 4
-     Cert server_certificate;
-     Cert client_certificate
-   }CInitPostHandAuthRequest
-
-
-   struct{
-     unit8 tag
-     select (tag.last_exchange){
-       case False:
-         uint32 session_id;
-     }
-     Signature signature
-   }CInitPostHandAuth
-
-   After the TLS handshake is completed
-
-   tag  is defined in Section 4.8.  The TLS client sets
-      tag.last_exchange if further post handshake authentications are
-      expected.  Similarly CS sets the tag.last_exchange if further post
-      handshake authentications are permitted.  Note that it is out of
-      scope of this specification to specify the reasons, but it is
-      RECOMMENEDED CS sets life time to LURK session as well as limits
-      the maximum number of post handshake authentications.
-
-   ephemeral  is defined in Section 4.5 and ephemeral_method MUST be set
-      to 'e_generated' when the TLS handshake agreed an ECDHE or a PSK-
-      ECDHE authentication.  The ephemeral_method MUST be set to
-      'no_secret' when PSK the TLS handshake agreed on PSK
-      authentication.
-
-   handshake  is defined in Section 4.2 and post handshake
-      authentication MUST be enabled by the TLS client.
-
-   cert  is defined in Section 4.7 and is used by the TLS client to
-      indicate the expected certificate to be used to compute the
-      signature as well as the certificate that is expected to be send
-      further to the TLS server.
-
-   sig_algo  is defined in Section 4.10 and indicates the selected
-      algorithm.
-
-
-
-Migault                  Expires 18 August 2022                [Page 32]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
-   signature  is defined in Section 4.10.
-
-6.2.  c_init_cert_verify
-
-   The c_init_cert_verify exchange occurs when the TLS client is being
-   requested to authenticate during the TLS handshake.  This exchange is
-   used when only PK is protected by CS and E has generated the (EC)DHE
-   shared secret, as well as any necessary secrets, and the only output
-   expected from CS is the signature.
-
-   The CInitCertVerifyRequest and CInitCertVerifyResponse are detailed
-   below:
+   The CInitClientFinishedRequest and CInitClientFinishedResponse are
+   detailed below:
 
    struct{
        uint8 tag;
@@ -1813,13 +1921,13 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
          case False:
            uint32 session_id;
        }
-       FreshnessFunct freshness;
-       Ephemeral ephemeral; ## e_generated
        Handshake handshake<0..2^32>; //RFC8446 section 4
        Cert server_certificate;
        Cert client_certificate
-       SignatureScheme sig_algo; //RFC8446 section 4.2.3.
-   }CInitCertVerifyRequest
+       FreshnessFunct freshness;
+       Ephemeral ephemeral; ## e_generated
+       opaque psk<0..2^16>;
+   }CInitClientFinishedRequest
 
    struct{
        uint8 tag;
@@ -1828,83 +1936,70 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
            uint32 session_id;
        }
        Signature signature;
-   }CInitCertVerifyResponse
+   }CInitClientFinishedResponse
 
-   As detailed in [RFC8446] section 4.4, the generation requires some
-   Handshake context as well as the client_handshake_traffic_secret
-   (h_c) which is generated by the key schedule and requires the (EC)DHE
-   shared secret.  CS does not have any previous knowledge of the TLS
-   handshake and all information need to be provided to CS.
+   psk  when provided, the PSK to be used for the schedule as described
+      in [RFC8446] section 7.1.
+
+   If the TLS handshake is not post_hand_auth_proposed, E set
+   tag.last_exchange to True, otherwise, tag.last_exchange SHOULD be set
+   to False.
+
+   The Handshake consists in every messages up to the server Finished
+   message to which the server Certificate message, if present has been
+   omitted and is instead carried in the server_certificate.  If
+   handshake is psk_agreed, server_certificate.cert_type is set to
+   'no_certificate', otherwise another cert_type MUST be used.
+   client_certificate.cert_type is set to 'no_certificate' in the
+   absence of CertificateRequest message and other type MUST be used
+   otherwise.
 
 
 
 
-
-
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 33]
+Migault                 Expires 29 September 2022              [Page 35]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
-   E MUST set tag.last_exchange to True unless post handshake
-   authentication has been enabled by E with a post_handshake_auth"
-   extension of the ClientHello.  In such case, E needs to determine if
-   further post handshake handshake may be requested by the TLS server,
-   and set it stag.last_exchange accordingly.  Typically, an application
-   that is only looking for a single client authentication within the
-   TLS handshake or as a post handshake may set tag.last_exchange to
-   True upon authenticating the client in the TLS handshake.
+   If the TLS server is authenticated with a certificate or using PSK-
+   ECDHE, the (EC)DHE is generated by E and ephemeral.method is set to
+   'e_generated'.  If the TLS server is authenticated with PSK, the
+   ephemeral.method is set to 'no_secret'.
 
-   E splits the necessary Handshake context which includes the server
-   Certificate as well as the client Certificate between the
-   server_certificate, teh client_certificate and the handshake
-   structure.  E protects the exchange from being replayed by setting
-   the ClientHello.random as described Section 4.4 and set freshness
-   accordingly.  The (EC)DHE share secret is provided via the ephemeral
-   and ephemeral.ephemeral_method is set to 'e_generated'.
+   This exchange occurs when E is performing the key schedule.  E SHOULD
+   provide the PSK value unless E knows CS is aware of the PSK or
+   tag.last_message is set to True.  In fact the key schedule is only
+   necessary to enable post handshake authentication.  If neither E nor
+   CS are aware of PSK, the TLS client MUST NOT propose post handshake
+   authentication.
 
-   Upon receiving a CInitCertVerifyRequest, CS checks the
-   tag.last_exchange to determine the presence of a session_id.  As
-   detailed in ((sec:tag}}, CS sets tag.last_exchange of the
-   CInitCertVerifyResponse to False if E has set it False, the handshake
-   is post_hand_auth_proposed and the CS policy permits it.  Otherwise
-   tag..last_exchange is set to True.
+   Upon receiving a CInitClientFinishedRequest, CS place the
+   server_certificate and client_certificate with a cert_type different
+   from 'no_certificate' in the handshake as described in Section 4.7.
+   CS generates the ClientHello.random with the freshness function as
+   described in Section 4.4.  If the handshake is certificate_request,
+   CS generates the signature.
 
-   According to [RFC8446] client authentication during the TLS handshake
-   is not valid with a PSK or PSK based authentication.  The Handshake
-   context MUST check the handshake is certificate_agree and
-   certificate_request with the presence of server Certificate,
-   CertificateRequest, server CertificateVerify messages.  As the
-   Certificate message is generated from the certificate structure, its
-   presence may be checked after it has been generated by the CS or
-   independently in the certificate and handshake structures.
+   CS sets tag.last_exchange and session_id as respectively detailed in
+   Section 4.8 and Section 4.3.
 
-   CS then updates the ClientHello.random with the freshness function as
-   described in Section 4.4.
+   If tag.last_exchange is False, CS generates the client
+   CertificateVerify and client Finished message, so further post
+   handshake authentication can be handled.  The generation of the
+   Finished message requires the h_c to be computed key schedule as
+   described in [RFC8445] section 7.1.  The PSK used in the key schedule
+   is determine as follows by CS.  If the CS has any out of band
+   knowledge of the PSK to be used, CS SHOULD use that value and ignore
+   the value provided by E.  If CS does not have such knowledge, CS
+   takes the value provided E.  A zero length PSK is considered as the
+   default value as described in [RFC8446] section 7.1.
 
-   CS checks the ephemeral.ephemeral_method is set to 'e_generated' and
-   initiates the key schedule to compute the h_c with the shared secret.
-   Once h_c has been computed, insert the client Certificate and
-   computes the signature.  If TLS client expects additional post
-   handshake authentication, CS computes the CertificateVerify and
-   Finished messages.
-
-6.3.  c_post_hand_auth
+6.2.  c_post_hand_auth
 
    If the TLS client has indicated support for post handshake client
    authentication, the TLS client MAY receive a CertificateRequest from
    the TLS server.
-
-
-
-Migault                  Expires 18 August 2022                [Page 34]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
 
    To proceed to the requested authentication, E proceeds to a
    c_post_hand_auth exchange with the CS.
@@ -1912,12 +2007,22 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    The CPostHandAuthRequest and CPostHandAuthResponse are detailed
    below:
 
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 36]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
    struct{
      Tag tag
      uint32 session_id
      Handshake handshake<0..2^32> // CertificateRequest
      Cert client_certificate;
-     SignatureScheme sig_algo;
    }CPostHandAuthRequest
 
 
@@ -1939,313 +2044,261 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    post_hand_auth_proposed as described in Section 4.2 and SHOULD return
    an 'invalid_handshake' error otherwise.  If the CS permits a limited
    number of post handshake client authentication, and that limit has
-   been reached, it SHOULD raise an 'invalid_type' error.  Note that in
-   some cases, such as with a c_cert_verify exchange, CS SHOULD resets
-   the session, if post handshake is not supported which result in the
-   session not being found.  CS MUST check client_certificate.cert_type
-   is not set to 'no_certificate', the provided certificate is known to
-   CS.  The certificate is eventually decompressed and added to the
-   handshake context as described in Section 4.7.  Note also that for
-   the client, the Certificate includes the certificate_request_context
-   provided by the CertificateRequest message as described in [RFC8446]
-   section . The signature is computed as detailed in [RFC8446] section
-   4.4.  CS MAY have a limit of permitted number of post handshake, and
-   set tag.last_exchange to True when that limit is reached.
+   been reached, it SHOULD raise an 'invalid_type' error.  CS MUST check
+   client_certificate.cert_type is not set to 'no_certificate', the
+   provided certificate is known to CS.  The certificate is decompressed
+   and added to the handshake context as described in Section 4.7.  Note
+   also that for the client, the Certificate includes the
+   certificate_request_context provided by the CertificateRequest
+   message as described in [RFC8446] section . The signature is computed
+   as detailed in [RFC8446] section 4.4.  CS MAY have a limit of
+   permitted number of post handshake, and set tag.last_exchange to True
+   when that limit is reached.
+
+6.3.  c_init_client_hello
+
+   The c_init_client_hello occurs when E requires CS to provide some
+   information to complete the ClientHello.  This occurs when the CS is
+   generating the (EC)DHE private key as well as when CS protects the
+   PSK and needs the binder key to generate the binders.
+
+   The CInitClientHelloRequest and CInitClientHelloResponse are detailed
+   below:
 
 
 
 
 
-
-Migault                  Expires 18 August 2022                [Page 35]
+Migault                 Expires 29 September 2022              [Page 37]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
-6.4.  c_init_client_hello
+   enum { sha256(0), sha384(1), sha512(2), ... (255) } TLSHash;
 
-   The c_init_ephemeral_binder exchange occurs when the TLS client needs
-   to generate the ClientHello as well as the early secrets.  In fact
-   the generation of the ClientHello may require CS to generates the
-   (EC)DHE private key and returns the public part as well as the
-   binder_key to generate the binders.  On the other hand, the
-   generation of the early secrets requires the ClientHello to be
-   completed.  As a result, CS will be expected to complete the
-   ClientHello from a potential partial ClientHello.  More specifically,
-   when binders are needed, the partial Client Hello does not contains
-   the OfferedPsks structure, that is the PreSharedKeyExtension.  The
-   latter structure is simply stripped from the ClientHello, without any
-   further changes, such as changing the lengths for example.  It is
-   entirely built by CS and append as the last extension as described in
-   section 4.2.11 of The reason for having CPskID as opposed to the
-   identity structure is that nothing prevent identities of two
-   different NewSessionTickets to be collide.  CPskID are managed by CS
-   of the TLS client to prevent such collisions and are provided during
-   the registration of the NewSessionTickets c_register_tickets (see
-   [RFC8446].  Note that extension_type as well as the 16 bit length of
-   the OfferedPsks remain present.  The PreSharedKeyExtension structure
-   of the ClientHello is built from a list of CPskIDs where each CPskID
-   designates a PSK with an identifier managed by CS of the TLS client.
-   The PSK can be associated to a NewSessionTicket in which case the
-   CPskID will be used to designate the NewSessionTicket and its
-   associate identity structure.Section 6.7).  When the PSK is
-   provisioned, the TLS client needs to be configured with it.  When CS
-   is not able to generate the PreSharedKeyExtension an invalid_identity
-   error SHOULD be raised.
-
-   Note that when PSK is not proposed or when PSK are not registered in
-   the CS, the ClientHello is fully provided - without the
-   PreSharedKeyExtension or with a completed PreSharedKeyExtension
-   extension.  CS is expected to be able to distinguish between the two
-   by for example, comparing the length of the handshake provided in
-   c_init_client_hello and the length indicated in the ClientHello.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 36]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
-   Note that (EC)DHE may be generated when ECDHE or PSK-ECDHE
-   authentication is proposed by the TLS client, while early secrets and
-   binder_key can only be requested when PSK is proposed.  When the TLS
-   client requests the generation of a (EC)DHE private key, the
-   KeyShareClietHello MAY contain a list of KeyShareEntry (defined in
-   section 4.2.8 When an error is found regarding the
-   KeyShareClientHello, CS SHOULD raise an invalid_ephemeral error.
-   Note that according to [RFC8446] ).  When provided, these structures
-   contains the group but are being stripped the key_exchange_value,
-   while all other fields - including the lengths - are left
-   unchanged.Section 4.5 when the ephemeral_method is set to
-   'no_secret', the resulting list is empty.
-
-   This exchange is followed by a c_client_hello or a
-   c_hand_and_app_secret.
+   enum { external(0), resumption(1) } PSKType;
 
    struct{
-     uint32 c_psk_id
-   }CPskID
+     uint16 identity_index;
+     TLSHash tls_hash;
+     PSKType psk_type<0..2^16-1>;
+     opaque psk_bytes<0..2^16>;
+   }PSKIdentityMetadata
 
    struct{
-     uint32 session_id
-     Freshness freshness
-     Ephemeral ephemeral ephemeral_method=secret_generate or no_secret
-     Handshake handshake<0..2^32> //RFC8446 section 4
-     CPskID c_psk_id_list<0..2^8-1>
+     uint32 session_id;
+     Handshake handshake<0..2^32>; //RFC8446 section 4
+     Freshness freshness;
+     PSKMetadata psk_metadata_list<0..2^16>
      uint16 secret_request;
-   }CInitClientHello
+   }CInitClientHelloRequest
 
    struct{
      uint32 session_id
      Ephemeral ephemeral_list<0..2^16-1>
+     Secret binder_key_list<0..2^16-1>;
      Secret secret_list<0..2^16-1>;
-   }CInitClientHello
+   }CInitClientHelloResponse
 
-   session_id, freshness and ephemeral, secret_request and secret_list
-   are respectively defined in Section 4.3, Section 4.4, Section 4.5,
-   Section 4.1 and Section 4.9.
+   E generates the ClientHello.random as described in If E requires CS
+   to generate (EC)DHE private keys, E replaces the KeyShareEntry
+   structure by the EmptyKeyShareEntry structure as described in
+   Section 4.4.Section 4.5.
 
-   ephemeral  is defined in Section 4.5.  With a single ClientHello or
-      partial ClientHello, ephemeral_method is set to secret_generate
-      when ECDHE and PSK-ECDHE authentication are being proposed or
-      no_secret when only PSK is proposed or when the ECDHE is generated
-      by the TLS client.
+   If PSK is proposed, E replaces the OfferedPsk structure by the
+   OfferedPsksWithNoBinders defined Section 4.2.  The structure contains
+   the PSK identities the TLS client intend to propose the TLS server.
+   These identities may combine a set of PSK protected by CS or not
+   protected by CS.  For each PSK not protected by CS, E generates a
+   PSKIdentityMetadata structure.  The PSKIdentityMetadata provides the
+   necessary element to instantiates a key schedule.  In addition, it
+   contains a identity_index whic is the index of the PSKIdentity in the
+   OfferedPsksWithNoBinders.identities This structure is then added to
+   the psk_metadata_list, and structures MUST respect a strict
+   identity_index increasing order.
 
-      Note that even though the CLientHello requests multiple
-      KeyShareENtries, a single ephemeral method is provided.
+   Upon receiving a CInitClientHello, CS proceeds to the session_id
+   negotiation and provides its inbound session_id as detailed in
+   Section 4.3.  CS takes the handshake message, update the
+   ClientHello.random as described in Section 4.4.  The CS extract the
+   KeyShareClientHello.client_shares.  When an EmptyKeyShareClientHello
 
 
 
-
-Migault                  Expires 18 August 2022                [Page 37]
+Migault                 Expires 29 September 2022              [Page 38]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
-   handshake  is defined in Section 4.2.  When a partial ClientHello is
-      provided, PSK or PSK-ECDHE MUST be enabled.  When a ClientHello is
-      provided, PSK or PSK-ECDHE may be proposed but with unprotected
-      keys.  ClientHello, HelloRetryRequest, ClientHello or ClientHello,
-      HelloRetryRequest, partial ClientHello MAY be provided.  However,
-      there are cases this is not possible, typically when the
-      HellRequestRetry does not contain a key_share extension, the
-      (EC)DHE shared secret is generated with the (EC)DHE generated
-      associated to the first ClientHello.  When the (EC)DHE private key
-      has been generated by the CS, the TLS client MUST use a
-      c_early_secret LURK exchange as defined in Section 6.5 in order to
-      ensure CS is aware of the (EC)DHE shared secret to generate the
-      further secrets.
+   structure is encountered, CS generates a corresponding private key
+   and generates the corresponding KeyShareEntry.  KeyShareEntry is
+   returned via a EphemeralResponse with method set to 'cs_generated'.
+   When a KeyShareEntry is found, an EphemeralResponse with method set
+   to 'e_generated' is generated.  As generated EphemeralResponse are
+   returned as described in Section 4.5 in te ephemeral_list.  If CS is
+   unable to generate an ephemeral of if the number of ephemeral values
+   to generate is too high, a 'invalid_ephemeral' error SHOULD be
+   raised.
 
-   c_psk_id  designate an 32 bit identifier for a PSK.  This identifier
-      is provided and managed by CS of the TLS client to avoid collision
-      of different PSK provided by different TLS servers.
+   If the handshake is 'psk_proposed', CS computes the binder key
+   associated to each PSK present in the OfferedPsks[identities].  The
+   computation of the binder_key only requires the knowledge of the PSK
+   as described in [RFC8446] section 7.1.  The computed binder_keys are
+   returned in the binder_key_list following the exact same order as the
+   OfferedPsks[identities].  Once all binder_keys have been generated,
+   CS generates the binders, which requires a partial ClientHello and a
+   binder_key.  The binders are integrated to the resulting ClientHello.
 
-   c_psk_id_list  designates the list of CPskIDs.  The list is used by
-      CS to build the OfferedPsks structure - including the PSKIdentity
-      structure.  The list of identities in the OfferedPsks MUST be the
-      same as the one of the c_psk_id_list.
+   With the ClientHello, early secrets are generated and returned as
+   described in Section 4.1.
 
-   ephemeral_list  When contains the different values of (EC)DHE public
-      parts - i.e. the KeyShareEntries when the ephemeral_method is set
-      to cs_generated.  When the ephemeral_method is set to no_secret,
-      the list is an empty list by construction of the ephemeral
-      structure (see Section 4.5).
+   Note that the binder key MUST be part of the binder_key_list and MUST
+   Be omitted in the secret_list.
 
-6.5.  c_client_hello
+6.4.  c_server_hello
 
-   The c_client_hello exchange occurs after a TLS server responds to a
-   ClientHello generated using a c_init_client_hello defined in
-   Section 6.4 is being responded a HelloRetryRequest by the TLS server.
-   While in some cases, re-initiating a LURK exchange with a
-   _init_client_hello MAY be considered, this document RECOMMENDS to
-   proceed as follows when a HelloRetryRequest is received:
+   This exchange follows the c_init_client_hello exchange and the main
+   purpose is the generation of the handshake secrets so E can decrypt
+   the encrypted message sent by the TLS server.
 
-   *  If the first ClientHello has been generated via a
-      c_init_client_hello, use c_client_hello to generate the second
-      ClientHello
-
-   *  If the first ClientHello has not been generated via a
-      c_init_client_hello, consider generating the second ClientHello
-      via c_init_client_hello.
-
-   This exchange is followed by a c_hand_and_app_secret.
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 38]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
-   struct{
-     uint32 session_id
-     Freshness freshness
-     Ephemeral ephemeral ephemeral_method=secret_generate or no_secret
-     Handshake handshake<0..2^32> //RFC8446 section 4
-     uint16 secret_request;
-   }CClientHello
-
-   struct{
-     uint32 session_id
-     Ephemeral ephemeral
-     Secret secret_list<0..2^16-1>;
-   }CClientHello
-
-   session_id, ephemeral, secret_request and secret_list are
-   respectively defined in Section 4.3, Section 4.5, Section 4.1 and
-   Section 4.9.
-
-   handshake  is defined in Section 4.2.  The handshake MUST contain a
-      HelloRetryRequest and a ClientHello or partial ClientHello.  The
-      same restrictions as defined in Section 6.4 apply to the
-      ClientHello
-
-6.6.  c_hand_and_app_secret
-
-   The c_hand_and_app_secret exchange occurs after a ServerHello is
-   received and the TLS client request handshake secrets to decrypt
-   (resp. encrypt) handshake messages sent by (resp. to) the server.
-   Similarly the TLS client requests application secrets used to protect
-   the TLS session as well as other secrets such as exporter secrets.
-
-   Upon receiption of the handshake CS derives the handshake secrets and
-   the server_handshake_traffic_secret as described in [RFC8446] section
-   7.3 to decrypt the encrypted messages.  The presence of a
-   CertificateRequest indicates the TLS server expects the TLS client to
-   authenticate via a CertificateVerify message.  If CS protects a
-   private key associated to the TLS client, CS MUST provides the
-   necessary information to the TLS client client.  Otherwise, the
-   CertificateRequest is ignored by the CS.
-
-   When CS generates the signature, the presence of the certificate, the
-   signature and sig_algo is indicated by setting tag.cert_request.
-   Unlike on the TLS server, where the TLS server indicates the
-   certificate to chose as well as the signature scheme to select, on
-   the TLS client, such decision is left to the CS.  The choice of the
-   signature algorithm and certificate is performed by CS as described
-   in When resumption_master_secret is requested by the TLS client, or
-   when further exchanges between teh TLS client and CS are expected, CS
-
-
-
-Migault                  Expires 18 August 2022                [Page 39]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
-   generates the CertificateVerify and Finished message to synchronize
-   the TLS handshake context.  The Certificate, respectively
-   CertificateVerify and Finished message are generated as described in
-   [RFC8446] section 4.4.2.3.  [RFC8446] section 4.4.2, section 4.4.3,
-   and section 4.4.4.
-
-   This exchange is followed by a c_post_hand_auth, c_register_ticket
+   The motivation for handling the decryption by E instead of the CS is
+   to enable E to perform some checks and transformations over the
+   encrypted message.  The down side is that it introduces an additional
    exchange.
 
-   struct{
-     uint8 tag;
-     uint32 session_id;
-     Ephemeral ephemeral;
-     Handshake handshake<0..2^32>; //RFC8446 section 4
-     uint16 secret_request;
-   }CHandAndAppSecretRequest
-
-   struct{
-     uint8 tag;
-     uint32 session_id;
-     Secret secret_list<0..2^16-1>;
-     select( tag.cert_request){
-       case true:
-         LURKTLS13Certificate certificate;
-         SignatureScheme sig_algo;
-         Signature signature;
-     }
-   }CHandAndAppSecretRequest
-
-   session_id, secret_request certificate signature, and secret_list are
-   respectively described in Section 4.3, Section 4.1, Section 4.7,
-   Section 4.10 and Section 4.9
-
-   tag  is defined in Section 4.8 and indicates whether the further
-      exchanges are expected or not.  If the TLS client or the TLS
-      server do not expect to perform session resumption or have not
-      enabled post handshake authentication the tag.last_exchange SHOULD
-      be set.
-
-   ephemeral  is defined in Section 4.5.  Since ClientHello as already
-      been sent, the purpose of the ephemeral is to provid ethe (EC)DHE
-      shared secret to perform the key schedule and ephemeral_method
-      MUST NOT be set to cs_generated.
-
-   handshake  is defined in Section 4.2 and includes the ServerHello up
-      to the server Finished.  These messages are passed to CS
-      encrypted.
+   The CServerHelloRequest and CServerHelloResponse structures are
+   described below:
 
 
 
 
-Migault                  Expires 18 August 2022                [Page 40]
+
+
+
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 39]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
-   sig_algo  is defined in Section 4.10 and defines the algorithm chosen
-      by the CS.
+   struct{
+       uint32 session_id
+       Handshake handshake<0..2^32> //RFC8446 section 4
+       Ephemeral ephemeral
+   } CServerHelloRequest
 
-6.7.  c_register_tickets
+   struct{
+       uint32 session_id
+       Secret secret_list<0..2^16-1>;
+   } CServerHelloResponse
+
+   Upon receiving the ServerHello, E checks if the TLS server
+   authentication is only based on PSK without (EC)DHE.  This is
+   performed by checking the TLS handshake is psk_proposed, psk_agreed
+   and not ks_agreed.  In that case, E sets the EphemeralRequest.method
+   to 'no_secret'.  Otherwise, E evaluates the KeyShareEntry selected by
+   the TLS server, that is the KeyShareServerHello.server_share.  If the
+   corresponding (EC)DHE private key has been generated by E, E
+   generates the shared key and provide it via an EphemeralRequest
+   structure with a method set to 'e_generated'.  If the corresponding
+   (EC)DHE private key has been generated by CS, E sends an
+   EphemeralRequest with a method set to 'cs_generated'.
+
+   Note that the handling enables the use of a combination of PSKs
+   hosted by CS and PSK hosted by E.  The implication of a PSK hosted by
+   the CS requires a c_init_client_hello exchange.  However, the TLS
+   server may select a PSK hosted by E.  When in addition the
+   authentication is using PSK without (EC)DHE or when the (EC)DHE has
+   been generated by E, E is able to generate the handshake, the
+   application and resumption secrets.  The only remaining interaction
+   between E and CS in the client authentication and these interactions
+   happens during the c_client_finished.  In this case E MUST directly
+   perform a c_client_finished exchange.
+
+   Upon receiving an CServerHelloRequest, CS checks the method is
+   aligned with the TLS handshake.  When the TLS server is authenticated
+   with a certificate, CS initiates the key schedule, otherwise CS
+   continue with the key schedule initialized during the
+   c_init_client_hello and generates the handshake secrets.
+
+   Upon receiving a CServerHelloResponse, E decrypt the encrypted
+   messages and proceed to the generation of the application secrets via
+   a c_client_finished exchange.
+
+
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 40]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
+6.5.  c_client_finished
+
+   The computation of the application and resumption secret are
+   performed as described in Section 6.1.  The only difference is that
+   the key scheduler has already been initialized when it follows a
+   c_server_hello exchange.
+
+   The CClientFinishedRequest and CClientFinishedResponse are detailed
+   below:
+
+   struct{
+       uint8 tag;
+       uint32 session_id;
+       Handshake handshake<0..2^32>; //RFC8446 section 4
+       Cert server_certificate;
+       Cert client_certificate
+   }CClientFinishedRequest
+
+   struct{
+       uint8 tag;
+       uint32 session_id;
+       Signature signature;
+   }CClientFinishedResponse
+
+   E performs a c_client_finished exchange either after a c_server_hello
+   exchange or after a c_init_client_hello exchange.  As described in
+   Section 6.4 E performs a c_server_hello to retrieve the handshake
+   secrets necessary to decrypt the encrypted messages of the handshake.
+
+   When E has access of the optional PSK and optional (EC)DHE values -
+   or these values are not needed, than E SHOULD compute the secret
+   without any interactions with CS.  As a result, interaction with CS
+   are restricted to the generation of the signature.  Assuming PK is
+   protected by the CS, E performs a c_client_finished either when the
+   TLS server requests the TLS client to authenticate (with a
+   CertificateRequest) or if the TLS client has enabled post handshake
+   client authentication.  In this case, CS MUST NOT regenerate
+   resumption secret and MUST sets its last_exchange to True unless post
+   authentication is enabled.  In this case handshake starts with a
+   ServerHello message.
+
+   Upon receiving a CClientFinishedRequest, CS generates the handshake
+   context as in a c_init_client_finished exchange (see Section 6.1) and
+   generates the signature.  More specifically, it generates and insert
+   the server and client Certificate from the server_certificate and
+   client_certificate structures.
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 41]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
+6.6.  c_register_tickets
 
    The c_register_ticket is only used when the TLS client intend to
    perform session resumption.  The LURK client MAY provide one or
@@ -2254,7 +2307,7 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    NewSessionTicket's identities may collide when being provided by
    multiple TLS servers, CS provides identities it manages to prevent
    such collisions (CPskID).  One such CPskID is assigned to each ticket
-   and is later used to designate that ticket (see Section 6.4).  When
+   and is later used to designate that ticket (see Section 6.3).  When
    too many tickets are provided, CS SHOULD raise a too_many_identities
    error.
 
@@ -2262,13 +2315,12 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
      uint8 tag
      uint32 session_id
      NewSessionTicket ticket_list<0..2^16-1>; //RFC8446 section 4.6.1.
-   } RegisterTicketsRequest;
+   } CRegisterTicketsRequest;
 
    struct {
      uint8 tag
      uint32 session_id
-     CPskID c_spk_id_list<0..2^8-1>
-   } RegisterTicketsResponse;
+   } CRegisterTicketsResponse;
 
 7.  Security Considerations
 
@@ -2291,16 +2343,17 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    TLS 1.3.  NewSessionTicket are only useful in a context of TLS 1.3
    authentication.
 
-
-
-Migault                  Expires 18 August 2022                [Page 41]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
    ECDHE and PSK-ECDHE provides perfect forward secrecy which prevents
    past session to be decrypted as long as the secret keys that
    generated teh ECDHE share secret are deleted after every TLS
+
+
+
+Migault                 Expires 29 September 2022              [Page 42]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
    handshake.  PSK authentication does not provide perfect forward
    secrecy and authentication relies on the PSK remaining sercet.  The
    Cryptographic Service does not reveal the PSK and instead limits its
@@ -2344,15 +2397,20 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    (freshness function).  This makes attacks on other TLS sessions
    unlikely.
 
-8.  IANA Considerations
 
 
 
 
-Migault                  Expires 18 August 2022                [Page 42]
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 43]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
+
+8.  IANA Considerations
 
 9.  Acknowledgments
 
@@ -2375,6 +2433,12 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
               2119 Key Words", BCP 14, RFC 8174, DOI 10.17487/RFC8174,
               May 2017, <https://www.rfc-editor.org/info/rfc8174>.
 
+   [RFC8445]  Keranen, A., Holmberg, C., and J. Rosenberg, "Interactive
+              Connectivity Establishment (ICE): A Protocol for Network
+              Address Translator (NAT) Traversal", RFC 8445,
+              DOI 10.17487/RFC8445, July 2018,
+              <https://www.rfc-editor.org/info/rfc8445>.
+
    [RFC8446]  Rescorla, E., "The Transport Layer Security (TLS) Protocol
               Version 1.3", RFC 8446, DOI 10.17487/RFC8446, August 2018,
               <https://www.rfc-editor.org/info/rfc8446>.
@@ -2394,21 +2458,19 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 
 10.2.  Informative References
 
+
+
+
+Migault                 Expires 29 September 2022              [Page 44]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
    [I-D.mglt-lurk-lurk]
               Migault, D., "LURK Protocol version 1", Work in Progress,
               Internet-Draft, draft-mglt-lurk-lurk-01, 26 July 2021,
               <https://www.ietf.org/archive/id/draft-mglt-lurk-lurk-
               01.txt>.
-
-
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 43]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
 
    [I-D.mglt-lurk-tls12]
               Migault, D. and I. Boureanu, "LURK Extension version 1 for
@@ -2450,6 +2512,16 @@ A.1.  TLS server ECDHE (no session resumption)
    The TLS server interacts with CS with a s_init_cert_verify exchange
    in order to respond to the ClientHello.
 
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 45]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
    Since there is no session resumption, the request indicates with the
    tag set to last_exchange that no subsequent messages are expected.
    As a result, no session_id is provided.  The freshness function is
@@ -2458,14 +2530,6 @@ A.1.  TLS server ECDHE (no session resumption)
    Certificate message is also omitted from the handshake and is instead
    provided in the certificate structure using a finger_print.  The
    requested secrets are handshake and application secrets, that is h_s,
-
-
-
-Migault                  Expires 18 August 2022                [Page 44]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
    h_c, a_s, and a_c.  The signature scheme is ed25519.  With
    authentication based on certificates, there are two ways to generate
    the shared secrets that is used as an input to the derive the
@@ -2477,8 +2541,8 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 A.1.1.  ecdhe generated on CS
 
    When the (EC)DHE private key and shared secrets are generated by the
-   CS, the LURK client set the ephemeral_method to cs_generated.  The
-   (EC)DHE group x25519 is specified in the handshake in the key_share
+   CS, the LURK client set the method to cs_generated.  The (EC)DHE
+   group x25519 is specified in the handshake in the key_share
    extension.  In return CS provides the LURK client the public key so
    the TLS server can send the ServerHello to the TLS client.
 
@@ -2490,13 +2554,37 @@ A.1.1.  ecdhe generated on CS
    returned in the CertificateVerify message as well as the secrets that
    will be used to derive the appropriated keys.
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 46]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
    TLS server
    LURK client                              Cryptographic Service
      SInitCertVerifyRequest
        tag=last_exchange        -------->
        freshness = sha256
        ephemeral
-         ephemeral_method = cs_generated
+         method = cs_generated
        handshake = handshake (x25519)
        certificate = finger_print
        secret_request = h_s, h_c, a_s, and a_c
@@ -2511,28 +2599,17 @@ A.1.1.  ecdhe generated on CS
                                         signature = sig
                                 <---------
 
-
-
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 45]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
 A.1.2.  ecdhe generated by the TLS server
 
    When the (EC)DHE private keys and the shared secrets are generated by
    the TLS server, the LURK client provides the shared secret to CS as
    only the shared secret is necessary to generated the signature.  This
-   is indicated by the ephemeral_method set to e_generated.  No (EC)DHE
-   values are returned by CS as these have already been generated by the
-   TLS server.  However, the TLS server has all the necessary material
-   to generate the secrets and the only information that CS owns and
-   that is not known to et TLS server is the private key (associated to
-   the certificate) used to generate the signature.  This means that is
+   is indicated by the method set to e_generated.  No (EC)DHE values are
+   returned by CS as these have already been generated by the TLS
+   server.  However, the TLS server has all the necessary material to
+   generate the secrets and the only information that CS owns and that
+   is not known to et TLS server is the private key (associated to the
+   certificate) used to generate the signature.  This means that is
    session resumption were allowed, since it is based on PSK
    authentication derived from the resumption secret, these sessions
    could be authenticated by the TLS server without any implication from
@@ -2546,13 +2623,24 @@ A.1.2.  ecdhe generated by the TLS server
    when requested - the secrets that will be used to derive the
    appropriated keys.
 
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 47]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
    TLS server
    LURK client                              Cryptographic Service
      SInitCertVerifyRequest
        tag.last_exchange=True   -------->
        freshness = sha256
        ephemeral
-         ephemeral_method = e_generated
+         method = e_generated
          key
            group = x25519
            shared_secret = shared_secret
@@ -2565,18 +2653,6 @@ A.1.2.  ecdhe generated by the TLS server
                                         secret_list
                                         signature = sig
                                       <---------
-
-
-
-
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 46]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
 
 A.2.  TLS server ECDHE ( with session resumption )
 
@@ -2603,6 +2679,17 @@ A.2.  TLS server ECDHE ( with session resumption )
    is that tag carries a session_id to identify the session between the
    TLS server and the CS.
 
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 48]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
    TLS server
    LURK client                              Cryptographic Service
      SInitCertVerifyRequest
@@ -2610,7 +2697,7 @@ A.2.  TLS server ECDHE ( with session resumption )
        session_id = session_id_tls_server    -------->
        freshness = sha256
        ephemeral
-         ephemeral_method = cs_generated
+         method = cs_generated
        handshake = handshake (x25519)
        certificate = finger_print
        secret_request = h_s, h_c, a_s, a_c
@@ -2625,14 +2712,6 @@ A.2.  TLS server ECDHE ( with session resumption )
                                         secret_list
                                         signature = sig
                                 <---------
-
-
-
-
-Migault                  Expires 18 August 2022                [Page 47]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
 
    To enable session resumption, the TLS server needs to send
    NewSessionTickets to the TLS client.  This exchange is taken from
@@ -2660,6 +2739,13 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    used in order to authenticate the TLS server using PSK or PSK-ECDHE
    authentication as describe din {sec:ex:srv:server-psk}.
 
+
+
+Migault                 Expires 29 September 2022              [Page 49]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
+
  TLS server
  LURK client                              Cryptographic Service
    SNewTicketRequest
@@ -2682,14 +2768,6 @@ A.3.  TLS server PSK / PSK-ECDHE
    resumption but can also be used outside the scope of session
    resumption.  In both cases, the PSK is hosted by the CS.
 
-
-
-
-Migault                  Expires 18 August 2022                [Page 48]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
    The PSK authentication can be illustrated by the exchange below:
 
    TLS client                                   TLS Server
@@ -2705,6 +2783,24 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
                                <--------     [Application Data*]
 
    The TLS client may propose to the TLS server multiple PSKs.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 50]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
 
    Each of these PSKs is associated a PskBindersEntry defined in
    [RFC8446] section 4.2.11.2.  PskBindersEntry is computed similarly to
@@ -2738,14 +2834,6 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    future inbound responses from CS (session_id_server).  The freshness
    function (sha256) is used to implement PFS together with the
    ClientHello.random.  selected_identity indicates the PSK chosen by
-
-
-
-Migault                  Expires 18 August 2022                [Page 49]
-
-Internet-Draft                LURK/TLS 1.3                 February 2022
-
-
    the TLS server among those proposed by the TLS client in its
    ClientHello.  The secrets requested by the TLS server are indicated
    in secret_request.  This example shows only the binder_key, but other
@@ -2754,6 +2842,21 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    CS responds with a SInitEarlySecretResponse that contains the
    session_id_cs used later to identify the incoming packets associated
    to the LURK session and the binder_key.
+
+
+
+
+
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 51]
+
+Internet-Draft                LURK/TLS 1.3                    March 2022
+
 
    TLS server
    LURK client                              Cryptographic Service
@@ -2777,11 +2880,11 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    exchanges.  In our case, this could mean the TLS server expects to
    request additional tickets.  The session_id is set to session_id_cs,
    the value provided by the CS.  ephemeral is in our case set the
-   ephemeral_method to cs_generated as described in Appendix A.1.  The
-   method (x25519) to generate the (EC)DHE is indicated in the
-   handshake.  The necessary handshake to derive the handshake and
-   application secrets, as well the requested secrets are indicated in
-   the secret_request structure.
+   method to cs_generated as described in Appendix A.1.  The method
+   (x25519) to generate the (EC)DHE is indicated in the handshake.  The
+   necessary handshake to derive the handshake and application secrets,
+   as well the requested secrets are indicated in the secret_request
+   structure.
 
    CS sets its tag.last_exchange to True to indicate the session will be
    closed after this exchange.  This also means that no ticket will be
@@ -2797,9 +2900,18 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
 
 
 
-Migault                  Expires 18 August 2022                [Page 50]
+
+
+
+
+
+
+
+
+
+Migault                 Expires 29 September 2022              [Page 52]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
  TLS server
@@ -2808,7 +2920,7 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
      tag.last_exchange = False
      session_id = session_id_cs
      ephemeral
-       ephemeral_method = cs_generated
+       method = cs_generated
      handshake = ServerHello(x25519) ... EncryptedExtensions
      secret_request = h_c, h_s, a_c, a_s ------->
                                     SHandAndAppResponse
@@ -2853,9 +2965,9 @@ A.4.  TLS client unauthenticated ECDHE
 
 
 
-Migault                  Expires 18 August 2022                [Page 51]
+Migault                 Expires 29 September 2022              [Page 53]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
    If the TLS client generates the (EC)DHE private key, no interaction
@@ -2883,35 +2995,35 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    ClientHello to the TLS server with ClientHello.random and by placing
    the KeyShareEntries.
 
-  TLS client
-  LURK client                              Cryptographic Service
-    CInitClientHello
-      session_id = session_id_tls_client
-      freshness = sha256
-      ephemeral
-        ephemeral_method = cs_generated
-      handshake = ClientHello(x25519, x488, ... )
-      c_psk_id_list = []
-      secret_request = []    ------>
-                                     CInitClientHello
-                                       session_id=session_id_cs
-                                       ephemeral_list
-                                         key
-                                           group = x25519,
-                                           key_exchange = public_key
-                                         ephemeral_method = cs_generated
-                                         key
-                                           group = x488,
-                                           key_exchange = public_key
-                                       secret_list=[]
+   TLS client
+   LURK client                              Cryptographic Service
+     CInitClientHello
+       session_id = session_id_tls_client
+       freshness = sha256
+       ephemeral
+         method = cs_generated
+       handshake = ClientHello(x25519, x488, ... )
+       c_psk_id_list = []
+       secret_request = []    ------>
+                                      CInitClientHello
+                                        session_id=session_id_cs
+                                        ephemeral_list
+                                          key
+                                            group = x25519,
+                                            key_exchange = public_key
+                                          method = cs_generated
+                                          key
+                                            group = x488,
+                                            key_exchange = public_key
+                                        secret_list=[]
 
 
 
 
 
-Migault                  Expires 18 August 2022                [Page 52]
+Migault                 Expires 29 September 2022              [Page 54]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
    Upon receiving the response from the TLS server, responds with a
@@ -2928,9 +3040,9 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    advertises by each party during the previous c_init_client_hello
    exchange.  Since CS already has the (EC)DHE private keys, it will be
    able to derive the (EC)DHE shared secret and no information needs to
-   be provided by the TLS client.  As a result, ephemeral_method is set
-   to no_secret.  The handshake is composed of the messages sent by the
-   TLS server.  As the TLS client does not have yet the messages are not
+   be provided by the TLS client.  As a result, method is set to
+   no_secret.  The handshake is composed of the messages sent by the TLS
+   server.  As the TLS client does not have yet the messages are not
    decrypted, and are provided encrypted.  The requested secrets are the
    handshake and application secrets.
 
@@ -2952,7 +3064,7 @@ LURK client                              Cryptographic Service
     tag.last_exchange=False
     session_id=session_id_cs
     ephemeral
-      ephemeral_method = no_secret
+      method = no_secret
     handshake = ServerHello, {EncryptedExtensions}...,{Finished}.
     secret_request = h_c, h_s, a_c, a_s ------->
                                    CHandAndAppSecretResponse
@@ -2965,9 +3077,9 @@ LURK client                              Cryptographic Service
 
 
 
-Migault                  Expires 18 August 2022                [Page 53]
+Migault                 Expires 29 September 2022              [Page 55]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
    Upon reception of the response, the TLS client generates the
@@ -3015,18 +3127,18 @@ A.5.  TLS client unauthenticated PSK / PSK-ECDHE
    In this section, the PSK is protected by the CS, but the (EC)DHE
    private keys are generated by the TLS client and as such are
    considered as unprotected.  As the (EC)DHE secret are generated by
-   the TLS client, the ephemeral_method is set to no_secret, and the
-   key_share extension is fully provided in the ClientHello.  However,
-   the ClientHello do not carry the PreSharedKeyExtension.  Instead,
+   the TLS client, the method is set to no_secret, and the key_share
+   extension is fully provided in the ClientHello.  However, the
+   ClientHello do not carry the PreSharedKeyExtension.  Instead, this
 
 
 
-Migault                  Expires 18 August 2022                [Page 54]
+Migault                 Expires 29 September 2022              [Page 56]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
-   this extension is built from the NewSessionTicket identifier nst_id
+   extension is built from the NewSessionTicket identifier nst_id
    provided in our case from a previous c_register_ticktes exchange (see
    Appendix A.4 }.  The TLS client requests the binder_key associated to
    nst_id in order to be able to complete the binders.
@@ -3042,7 +3154,7 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
        session_id = session_id_tls_client
        freshness = sha256
        ephemeral
-         ephemeral_method = no_secret
+         method = no_secret
        handshake = ClientHello without PreSharedKeyExtension
        c_psk_id_list = [nst_id]
        secret_request = [b]    ------>
@@ -3063,7 +3175,7 @@ LURK client                              Cryptographic Service
     tag.last_exchange=False
     session_id=session_id_cs
     ephemeral
-      ephemeral_method = e_generated
+      method = e_generated
       shared_secret
     handshake = ServerHello, {EncryptedExtensions}...,{Finished}.
     secret_request = h_c, h_s, a_c, a_s ------->
@@ -3077,9 +3189,9 @@ LURK client                              Cryptographic Service
 
 
 
-Migault                  Expires 18 August 2022                [Page 55]
+Migault                 Expires 29 September 2022              [Page 57]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
    Upon receiving the response, the TLS client proceeds similarly to the
@@ -3133,9 +3245,9 @@ A.6.1.  (EC)DHE or Proposed PSK protected by the CS
 
 
 
-Migault                  Expires 18 August 2022                [Page 56]
+Migault                 Expires 29 September 2022              [Page 58]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
 TLS client
@@ -3144,7 +3256,7 @@ LURK client                              Cryptographic Service
     tag.last_exchange=False
     session_id=session_id_cs
     ephemeral
-      ephemeral_method = e_generated
+      method = e_generated
       shared_secret
     handshake = ServerHello, {EncryptedExtensions}...,{Finished}.
     secret_request = h_c, h_s, a_c, a_s ------->
@@ -3189,9 +3301,9 @@ A.6.2.  (EC)DHE provided by the TLS client
 
 
 
-Migault                  Expires 18 August 2022                [Page 57]
+Migault                 Expires 29 September 2022              [Page 59]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
    The TLS client does not need to interact with CS to build its
@@ -3202,19 +3314,19 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
    the TLS client requests CS to generate the signature needed to send
    the CertificateVerify.  The exchange is very similar as the one
    s_init_cert_verify (see Appendix A.1.2).  As the (EC)DHE shared
-   secret is generated by the TLS client, the ephemeral_method is
-   necessarily set to e_generated.  The handshake is set to the
-   ClientHello ... server Finished, and the certificate carries the
-   reference to the TLS client certificate, so CS picks the appropriated
-   private key.  sig_algo designates the signature algorithm.
+   secret is generated by the TLS client, the method is necessarily set
+   to e_generated.  The handshake is set to the ClientHello ... server
+   Finished, and the certificate carries the reference to the TLS client
+   certificate, so CS picks the appropriated private key.  sig_algo
+   designates the signature algorithm.
 
    TLS server
    LURK client                              Cryptographic Service
-     CInitCertVerifyRequest
+     CInitClientFinishedRequest
        tag.last_exchange=True   -------->
        freshness = sha256
        ephemeral
-         ephemeral_method = e_generated
+         method = e_generated
          key
            group = x25519
            shared_secret = shared_secret
@@ -3222,7 +3334,7 @@ Internet-Draft                LURK/TLS 1.3                 February 2022
        certificate
          certificate_type = finger_print
        sig_algo = ed25519
-                                      CInitCertVerifyResponse
+                                      CInitClientFinishedResponse
                                         tag.last_exchange=True
                                         signature = sig
                                       <---------
@@ -3245,9 +3357,9 @@ A.7.  TLS client authenticated - post handshake authentication
 
 
 
-Migault                  Expires 18 August 2022                [Page 58]
+Migault                 Expires 29 September 2022              [Page 60]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
    In some cases, both c_init_post_hand_auth and c_post_hand_auth can be
@@ -3264,9 +3376,9 @@ A.7.1.  Initial Post Handshake Authentication
    the TLS client.  Upon receiving a CertificateRequest, the TLS client
    sends session_id and freshness to initiate the LURK session.
    tag.last_exchange is set in order to accept future post handshake
-   authentication request.  ephemeral_method is set to secret_provide as
-   CS is unable to generate the (EC)DHE shared secret.  handshake is set
-   to the full handshake including the just received CertificateRequest
+   authentication request.  method is set to secret_provide as CS is
+   unable to generate the (EC)DHE shared secret.  handshake is set to
+   the full handshake including the just received CertificateRequest
    message.  The certificate represents the TLS client certificate to
    determine the private key involved in computing the signature.
    sig_algo specifies the signature algorithm.
@@ -3278,7 +3390,7 @@ A.7.1.  Initial Post Handshake Authentication
        session_id = session_id_tls_client
        freshness = sha256
        ephemeral
-         ephemeral_method = e_generated
+         method = e_generated
        handshake = ClientHello ... client Finished CertificateRequest
        certificate
          certificate_type = finger_print
@@ -3301,9 +3413,9 @@ A.7.2.  Post Handshake Authentication
 
 
 
-Migault                  Expires 18 August 2022                [Page 59]
+Migault                 Expires 29 September 2022              [Page 61]
 
-Internet-Draft                LURK/TLS 1.3                 February 2022
+Internet-Draft                LURK/TLS 1.3                    March 2022
 
 
    TLS server
@@ -3357,4 +3469,4 @@ Author's Address
 
 
 
-Migault                  Expires 18 August 2022                [Page 60]
+Migault                 Expires 29 September 2022              [Page 62]
